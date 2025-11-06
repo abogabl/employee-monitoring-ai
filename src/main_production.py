@@ -115,12 +115,13 @@ def main() -> None:
     errors = ErrorHandler()
 
     detector = PersonDetector(model_size="n", device=args.device, conf=args.conf, imgsz=args.imgsz, half=(args.device == "cuda"))
-    tracker = PersonTracker(max_disappeared=30, max_distance=75)
+    # تتبع أكثر ثباتاً: تحمّل اختفاء أطول ومسافة مطابقة أصغر
+    tracker = PersonTracker(max_disappeared=60, max_distance=25)
 
     frs = None
     if args.enable_face_recognition:
         try:
-            frs = FaceRecognitionSystem(model_name="buffalo_l", threshold=0.6)
+            frs = FaceRecognitionSystem(model_name="buffalo_l", threshold=0.8)
             # تحميل التضمينات إن وُجدت
             enc_pkl = project_root / "models" / "face_encodings.pkl"
             if enc_pkl.exists():
@@ -174,6 +175,12 @@ def main() -> None:
     track_to_emp: Dict[int, str] = {}  # track_id -> employee_id
     track_last_seen: Dict[int, float] = {}
     track_display_name: Dict[int, str] = {}
+    # تثبيت الهوية: تصويت أقوى وهستيريсис لمنع تبديل الهوية بسهولة
+    SMOOTH_K = 5
+    MIN_SIM = 0.85
+    MARGIN = 0.05  # هامش إضافي عند محاولة تبديل هوية مثبتة
+    from collections import defaultdict
+    recog_votes: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))  # tid -> {emp_id: votes}
 
     # تعدد الخيوط (اختياري)
     pool = ThreadPoolExecutor(max_workers=max(1, args.threads)) if args.threads > 0 else None
@@ -226,14 +233,35 @@ def main() -> None:
                             # اختيار أفضل وجه داخل القص
                             best = max(faces, key=lambda f: float(f.get("det_score", 0.0)))
                             eid, sim, ename = frs.recognize_face(best["embedding"])  # type: ignore[index]
-                            if eid:
-                                emp_id = eid
-                                track_to_emp[tid] = emp_id
-                                name = ename or emp_id
-                                track_display_name[tid] = name
+                            # تطبيق التصويت فقط عند تشابه كافٍ
+                            if eid and sim is not None and float(sim) >= MIN_SIM:
+                                # زيادة تصويت المرشح
+                                recog_votes[tid][eid] += 1
+                                current = track_to_emp.get(tid)
+                                # إذا لا توجد هوية حالية واعتماد التصويت
+                                if current is None and recog_votes[tid][eid] >= SMOOTH_K:
+                                    emp_id = eid
+                                    track_to_emp[tid] = emp_id
+                                    name = ename or emp_id
+                                    track_display_name[tid] = name
+                                    for k in list(recog_votes[tid].keys()):
+                                        if k != eid:
+                                            recog_votes[tid][k] = 0
+                                # إذا كانت هناك هوية حالية مختلفة، لا نبدّل إلا بهوامش أعلى وتصويت كافٍ
+                                elif current is not None and current != eid:
+                                    if recog_votes[tid][eid] >= SMOOTH_K and float(sim) >= (MIN_SIM + MARGIN):
+                                        emp_id = eid
+                                        track_to_emp[tid] = emp_id
+                                        name = ename or emp_id
+                                        track_display_name[tid] = name
+                                        for k in list(recog_votes[tid].keys()):
+                                            if k != eid:
+                                                recog_votes[tid][k] = 0
                             else:
-                                name = "Unknown"
-                                track_display_name[tid] = name
+                                # في حال عدم ثقة كافية، لا نغيّر الهوية الحالية
+                                # تقليل بسيط للأصوات لتفادي تراكم قديم
+                                for k in list(recog_votes[tid].keys()):
+                                    recog_votes[tid][k] = max(0, recog_votes[tid][k] - 1)
                     except Exception as e:
                         errors.log_error(e, context="face_recognition")
 

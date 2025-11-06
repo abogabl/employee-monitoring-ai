@@ -19,11 +19,25 @@ except Exception:  # في حال عدم توفر torch أثناء التحضير
 
 from ultralytics import YOLO
 try:
-    # PyTorch 2.6+: default weights_only=True requires allow-listing Ultralytics classes
-    from torch.serialization import add_safe_globals  # type: ignore
+    # PyTorch 2.6+: default weights_only=True requires allow-listing classes used in YOLO checkpoints
+    from torch.serialization import add_safe_globals, safe_globals  # type: ignore
     from ultralytics.nn.tasks import DetectionModel  # type: ignore
+    # وحدات إضافية شائعة داخل نقاط تفتيش YOLO
+    from ultralytics.nn.modules import Conv, C2f, SPPF, Bottleneck, Detect  # type: ignore
+    # شائعة في نماذج YOLO
+    from torch.nn.modules.container import Sequential, ModuleList  # type: ignore
+    from torch.nn import Conv2d, BatchNorm2d, Linear, ReLU, SiLU, LeakyReLU, Upsample  # type: ignore
+    from torch.nn import MaxPool2d, ConvTranspose2d  # type: ignore
     try:
-        add_safe_globals([DetectionModel])
+        add_safe_globals([
+            DetectionModel,
+            Sequential, ModuleList,
+            Conv2d, BatchNorm2d, Linear,
+            ReLU, SiLU, LeakyReLU,
+            Upsample, MaxPool2d, ConvTranspose2d,
+            # Ultralytics custom modules
+            Conv, C2f, SPPF, Bottleneck, Detect,
+        ])
     except Exception:
         pass
 except Exception:
@@ -77,7 +91,22 @@ class PersonDetector:
 
         # تحميل النموذج
         try:
-            self.model = YOLO(self.model_path)
+            # تأمين بيئة التحميل مع السماح للفئات المطلوبة أثناء torch.load
+            try:
+                from torch.serialization import safe_globals as _safe_globals  # noqa: F401
+                allowed = [
+                    DetectionModel,
+                    Sequential, ModuleList,
+                    Conv2d, BatchNorm2d, Linear,
+                    ReLU, SiLU, LeakyReLU,
+                    Upsample, MaxPool2d, ConvTranspose2d,
+                    Conv, C2f, SPPF, Bottleneck, Detect,
+                ]
+                with safe_globals(allowed):
+                    self.model = YOLO(self.model_path)
+            except Exception:
+                # في حال غياب context manager، نعتمد على add_safe_globals فقط
+                self.model = YOLO(self.model_path)
             if self.device == "cuda":
                 self.model.to("cuda")
             if self.use_half and torch is not None:
@@ -153,7 +182,7 @@ class PersonTracker:
     - يحذف المسارات التي تتجاوز حد الاختفاء.
     """
 
-    def __init__(self, max_disappeared: int = 30, max_distance: float = 50.0) -> None:
+    def __init__(self, max_disappeared: int = 60, max_distance: float = 35.0) -> None:
         self.max_disappeared = int(max_disappeared)
         self.max_distance = float(max_distance)
         self.next_track_id: int = 1
