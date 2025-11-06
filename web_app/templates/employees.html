@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>الموظفون</h3>
+<div class="row">
+  <div class="col-md-6">
+    <h5>إضافة/تعديل موظف</h5>
+    <form method="post" action="{{ url_for('employees_add') }}" class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label">المعرف</label>
+        <input name="emp_id" class="form-control" required />
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">الاسم</label>
+        <input name="name" class="form-control" required />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">القسم</label>
+        <input name="department" class="form-control" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">الوظيفة</label>
+        <input name="position" class="form-control" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">تاريخ التعيين</label>
+        <input name="hire_date" type="date" class="form-control" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">نشط</label>
+        <select name="active" class="form-select">
+          <option value="true" selected>نعم</option>
+          <option value="false">لا</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+  <div class="col-md-6">
+    <h5>قائمة الموظفين</h5>
+    <table class="table table-sm table-striped">
+      <thead><tr><th>EMP ID</th><th>الاسم</th><th>القسم</th><th>الوظيفة</th><th>نشط</th></tr></thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td>{{ e.emp_id }}</td>
+          <td>{{ e.name }}</td>
+          <td>{{ e.get('department','') }}</td>
+          <td>{{ e.get('position','') }}</td>
+          <td>{{ 'Yes' if e.get('active', True) else 'No' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

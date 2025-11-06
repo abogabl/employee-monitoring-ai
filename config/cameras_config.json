@@ -1,0 +1,46 @@
+{
+  "global_settings": {
+    "enable_face_recognition": true,
+    "enable_activity_recognition": true,
+    "enable_attendance": true,
+    "grace_seconds": 60,
+    "report_interval": 300,
+    "output_dir": "results/",
+    "log_level": "INFO"
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "مدخل المكتب",
+      "source": "rtsp://192.168.1.100/stream1",
+      "device": "cuda:0",
+      "imgsz": 640,
+      "conf": 0.5,
+      "enabled": true,
+      "location": "entrance",
+      "priority": 1
+    },
+    {
+      "id": "cam2",
+      "name": "قسم IT",
+      "source": "rtsp://192.168.1.101/stream1",
+      "device": "cuda:0",
+      "imgsz": 416,
+      "conf": 0.6,
+      "enabled": true,
+      "location": "it_department",
+      "priority": 2
+    },
+    {
+      "id": "cam3",
+      "name": "قاعة الاجتماعات",
+      "source": "0",
+      "device": "cpu",
+      "imgsz": 320,
+      "conf": 0.5,
+      "enabled": false,
+      "location": "meeting_room",
+      "priority": 3
+    }
+  ]
+}

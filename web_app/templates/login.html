@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="card-title">تسجيل الدخول</h4>
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">اسم المستخدم</label>
+            <input name="username" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">كلمة المرور</label>
+            <input name="password" type="password" class="form-control" required />
+          </div>
+          <button class="btn btn-primary">دخول</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

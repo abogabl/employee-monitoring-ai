@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>لوحة القيادة</h3>
+<div class="row g-3">
+  <div class="col-sm-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">الحاضرون الآن</h5>
+        <p class="display-5" id="present_count">{{ present_count }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">الكاميرات النشطة</h5>
+        <p class="display-5" id="cameras_active">{{ cameras_active }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">ساعات اليوم الإجمالية</h5>
+        <p class="display-5">{{ total_hours }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4">
+  <h5>حالة الكاميرات</h5>
+  <table class="table table-sm table-striped">
+    <thead><tr><th>الكاميرا</th><th>تشغيل</th><th>OK</th><th>متجمدة</th><th>رسالة</th></tr></thead>
+    <tbody>
+      {% for cid, st in cams_status.items() %}
+      <tr>
+        <td>{{ cid }}</td>
+        <td>{{ 'نعم' if st.running else 'لا' }}</td>
+        <td>{{ 'نعم' if st.health.ok else 'لا' }}</td>
+        <td>{{ 'نعم' if st.health.frozen else 'لا' }}</td>
+        <td>{{ st.health.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+// SSE للتحديثات الفورية للبلاطات
+(function(){
+  try{
+    const es = new EventSource('/events');
+    es.onmessage = (ev)=>{
+      const data = JSON.parse(ev.data);
+      if (data.present !== undefined) document.getElementById('present_count').textContent = data.present;
+      if (data.active_cams !== undefined) document.getElementById('cameras_active').textContent = data.active_cams;
+    };
+  }catch(e){}
+})();
+</script>
+{% endblock %}

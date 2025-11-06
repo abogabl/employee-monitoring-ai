@@ -1,0 +1,4 @@
+body { background:#fafafa; }
+.card-title { font-weight:600; }
+.text-truncate { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+pre { font-family: Consolas, monospace; font-size: 12px; }

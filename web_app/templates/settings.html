@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3 class="mb-4">الإعدادات</h3>
+
+<form id="settings-form" method="post" action="{{ url_for('settings_update') }}">
+  <!-- تبويب بسيط -->
+  <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="global-tab" data-bs-toggle="tab" data-bs-target="#global" type="button" role="tab">الإعدادات العامة</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="cameras-tab" data-bs-toggle="tab" data-bs-target="#cameras" type="button" role="tab">الكاميرات</button>
+    </li>
+  </ul>
+
+  <div class="tab-content border border-top-0 p-3" id="settingsTabsContent">
+    <!-- الإعدادات العامة -->
+    <div class="tab-pane fade show active" id="global" role="tabpanel" aria-labelledby="global-tab">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">التعرف على الوجوه</label>
+          <select class="form-select" id="gs_face">
+            <option value="true" {{ 'selected' if config.global_settings.enable_face_recognition else '' }}>مفعّل</option>
+            <option value="false" {{ '' if config.global_settings.enable_face_recognition else 'selected' }}>معطّل</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">التعرف على الأنشطة</label>
+          <select class="form-select" id="gs_activity">
+            <option value="true" {{ 'selected' if config.global_settings.enable_activity_recognition else '' }}>مفعّل</option>
+            <option value="false" {{ '' if config.global_settings.enable_activity_recognition else 'selected' }}>معطّل</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">تتبّع الحضور</label>
+          <select class="form-select" id="gs_attendance">
+            <option value="true" {{ 'selected' if config.global_settings.enable_attendance else '' }}>مفعّل</option>
+            <option value="false" {{ '' if config.global_settings.enable_attendance else 'selected' }}>معطّل</option>
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">مهلة السماح (ثوانٍ)</label>
+          <input type="number" class="form-control" id="gs_grace" value="{{ config.global_settings.grace_seconds }}" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">فاصل التقارير (ثوانٍ)</label>
+          <input type="number" class="form-control" id="gs_report_interval" value="{{ config.global_settings.report_interval }}" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">مجلد الإخراج</label>
+          <input type="text" class="form-control" id="gs_output" value="{{ config.global_settings.output_dir }}" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">مستوى السجلات</label>
+          <input type="text" class="form-control" id="gs_loglevel" value="{{ config.global_settings.log_level }}" />
+        </div>
+      </div>
+    </div>
+
+    <!-- الكاميرات -->
+    <div class="tab-pane fade" id="cameras" role="tabpanel" aria-labelledby="cameras-tab">
+      <div id="cams-container" class="vstack gap-3">
+        {% for cam in config.cameras %}
+        <div class="card" data-cam>
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-2">
+                <label class="form-label">ID</label>
+                <input type="text" class="form-control" data-field="id" value="{{ cam.id }}" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">الاسم</label>
+                <input type="text" class="form-control" data-field="name" value="{{ cam.name }}" />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">المصدر (URL/ملف)</label>
+                <input type="text" class="form-control" data-field="source" value="{{ cam.source }}" />
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">الجهاز</label>
+                <input type="text" class="form-control" data-field="device" value="{{ cam.device }}" />
+              </div>
+              <div class="col-md-1">
+                <label class="form-label">imgsz</label>
+                <input type="number" class="form-control" data-field="imgsz" value="{{ cam.imgsz }}" />
+              </div>
+              <div class="col-md-1">
+                <label class="form-label">conf</label>
+                <input type="number" step="0.01" class="form-control" data-field="conf" value="{{ cam.conf }}" />
+              </div>
+            </div>
+            <div class="mt-2 d-flex gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" data-field="enabled" id="chk_{{ loop.index }}" {{ 'checked' if cam.enabled else '' }}>
+                <label class="form-check-label" for="chk_{{ loop.index }}">مفعّل</label>
+              </div>
+              <input type="text" class="form-control" style="max-width:200px" placeholder="الموقع (اختياري)" data-field="location" value="{{ cam.location or '' }}" />
+              <button type="button" class="btn btn-outline-danger btn-sm ms-auto" onclick="removeCam(this)">حذف</button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-3">
+        <button type="button" class="btn btn-outline-primary" onclick="addCam()">إضافة كاميرا</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- حقل مخفي لإرسال JSON النهائي -->
+  <textarea name="config_json" id="config_json" class="d-none">{{ config_json }}</textarea>
+
+  <div class="mt-3">
+    <button class="btn btn-primary" onclick="return buildAndSubmit()">حفظ</button>
+  </div>
+</form>
+
+<script>
+function valBool(v){ return String(v) === 'true'; }
+function addCam(){
+  const container = document.getElementById('cams-container');
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.setAttribute('data-cam','');
+  div.innerHTML = `
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-2"><label class="form-label">ID</label><input class="form-control" data-field="id" /></div>
+        <div class="col-md-3"><label class="form-label">الاسم</label><input class="form-control" data-field="name" /></div>
+        <div class="col-md-3"><label class="form-label">المصدر (URL/ملف)</label><input class="form-control" data-field="source" /></div>
+        <div class="col-md-2"><label class="form-label">الجهاز</label><input class="form-control" data-field="device" value="cpu" /></div>
+        <div class="col-md-1"><label class="form-label">imgsz</label><input type="number" class="form-control" data-field="imgsz" value="640" /></div>
+        <div class="col-md-1"><label class="form-label">conf</label><input type="number" step="0.01" class="form-control" data-field="conf" value="0.5" /></div>
+      </div>
+      <div class="mt-2 d-flex gap-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" data-field="enabled" checked>
+          <label class="form-check-label">مفعّل</label>
+        </div>
+        <input type="text" class="form-control" style="max-width:200px" placeholder="الموقع (اختياري)" data-field="location" />
+        <button type="button" class="btn btn-outline-danger btn-sm ms-auto" onclick="removeCam(this)">حذف</button>
+      </div>
+    </div>`;
+  container.appendChild(div);
+}
+function removeCam(btn){
+  const card = btn.closest('[data-cam]');
+  if(card) card.remove();
+}
+function buildAndSubmit(){
+  const cfg = {
+    global_settings: {
+      enable_face_recognition: valBool(document.getElementById('gs_face').value),
+      enable_activity_recognition: valBool(document.getElementById('gs_activity').value),
+      enable_attendance: valBool(document.getElementById('gs_attendance').value),
+      grace_seconds: parseInt(document.getElementById('gs_grace').value || '60'),
+      report_interval: parseInt(document.getElementById('gs_report_interval').value || '300'),
+      output_dir: document.getElementById('gs_output').value || 'reports',
+      log_level: document.getElementById('gs_loglevel').value || 'INFO'
+    },
+    cameras: []
+  };
+  document.querySelectorAll('[data-cam]').forEach(card => {
+    const get = f => card.querySelector(`[data-field="${f}"]`);
+    cfg.cameras.push({
+      id: (get('id')?.value || '').trim(),
+      name: (get('name')?.value || '').trim(),
+      source: (get('source')?.value || '').trim(),
+      device: (get('device')?.value || 'cpu').trim(),
+      imgsz: parseInt(get('imgsz')?.value || '640'),
+      conf: parseFloat(get('conf')?.value || '0.5'),
+      enabled: !!get('enabled')?.checked,
+      location: (get('location')?.value || '').trim()
+    });
+  });
+  const ta = document.getElementById('config_json');
+  ta.value = JSON.stringify(cfg, null, 2);
+  document.getElementById('settings-form').submit();
+  return false;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>سجلات النظام</h3>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <label class="form-label">بحث</label>
+    <input name="q" class="form-control" value="{{ request.args.get('q','') }}" />
+  </div>
+  <div class="col-auto align-self-end">
+    <button class="btn btn-secondary">بحث</button>
+  </div>
+</form>
+<pre style="max-height:60vh; overflow:auto; background:#111; color:#0f0; padding:12px;">{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+{% endblock %}

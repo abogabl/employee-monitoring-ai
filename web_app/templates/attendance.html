@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>الحضور اليومي</h3>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <input type="date" name="date" value="{{ date }}" class="form-control"/>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">تحديث</button>
+  </div>
+  <div class="col-auto">
+    <a class="btn btn-success" href="{{ url_for('attendance_export', date=date) }}">تصدير CSV</a>
+  </div>
+</form>
+<table class="table table-striped table-sm">
+  <thead>
+    <tr>
+      <th>EMP ID</th><th>الاسم</th><th>الكاميرا</th><th>الدخول</th><th>الخروج</th><th>الحالة</th><th>المدة (ث)</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.employee_id }}</td>
+      <td>{{ r.employee_name }}</td>
+      <td>{{ r.camera_id }}</td>
+      <td>{{ r.check_in_time }}</td>
+      <td>{{ r.check_out_time or '-' }}</td>
+      <td>{{ r.status }}</td>
+      <td>{{ r.duration_seconds or '-' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

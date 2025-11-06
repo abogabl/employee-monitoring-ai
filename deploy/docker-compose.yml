@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    container_name: employee-monitoring-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./config:/app/config
+      - ./reports:/app/reports
+      - ./attendance_db:/app/attendance_db
+      - ./employees_database:/app/employees_database
+      - ./models:/app/models
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g

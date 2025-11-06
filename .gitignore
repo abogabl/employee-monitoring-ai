@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs and reports
+logs/
+reports/*.csv
+reports/*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+*.cache/
+.cache/
+
+# Models and large files (optional)
+models/
+videos/
+
+# Keep folder structure with .gitkeep
+!models/.gitkeep
+!videos/.gitkeep
+!logs/.gitkeep

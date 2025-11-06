@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>الكاميرات</h3>
+<table class="table table-striped table-sm">
+  <thead><tr><th>ID</th><th>Name</th><th>Source</th><th>Device</th><th>Enabled</th><th>Location</th><th>Priority</th><th>Status</th><th>Controls</th></tr></thead>
+  <tbody>
+    {% for c in cameras %}
+    {% set st = status.get(c.id|string, {}) %}
+    <tr>
+      <td>{{ c.id }}</td>
+      <td>{{ c.name }}</td>
+      <td class="text-truncate" style="max-width:240px">{{ c.source }}</td>
+      <td>{{ c.device }}</td>
+      <td>{{ 'Yes' if c.enabled else 'No' }}</td>
+      <td>{{ c.location }}</td>
+      <td>{{ c.priority }}</td>
+      <td>
+        {% if st %}
+          {{ 'Running' if st.running else 'Stopped' }} | {{ st.health.message or '' }}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+          <input type="hidden" name="action" value="start"/>
+          <button class="btn btn-sm btn-success">تشغيل</button>
+        </form>
+        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+          <input type="hidden" name="action" value="restart"/>
+          <button class="btn btn-sm btn-warning">إعادة تشغيل</button>
+        </form>
+        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+          <input type="hidden" name="action" value="stop"/>
+          <button class="btn btn-sm btn-danger">إيقاف</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

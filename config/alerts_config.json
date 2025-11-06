@@ -1,0 +1,51 @@
+{
+  "enabled": true,
+  "check_interval": 60,
+  "cooldown": 300,
+  "channels": {
+    "email": {
+      "enabled": true,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "sender": "system@company.com",
+      "recipients": ["manager@company.com"]
+    },
+    "telegram": {
+      "enabled": true,
+      "bot_token": "YOUR_BOT_TOKEN",
+      "chat_ids": [123456789]
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "https://hooks.slack.com/services/xxx/yyy/zzz",
+      "headers": {
+        "Content-Type": "application/json"
+      }
+    }
+  },
+  "rules": {
+    "late_employee": {
+      "enabled": true,
+      "threshold_minutes": 15,
+      "priority": "MEDIUM",
+      "channels": ["email", "telegram"]
+    },
+    "camera_down": {
+      "enabled": true,
+      "priority": "HIGH",
+      "channels": ["telegram"]
+    },
+    "unknown_face": {
+      "enabled": true,
+      "max_count": 3,
+      "priority": "HIGH",
+      "channels": ["telegram"]
+    },
+    "low_productivity": {
+      "enabled": true,
+      "threshold": 0.5,
+      "priority": "MEDIUM",
+      "channels": ["email"]
+    }
+  }
+}

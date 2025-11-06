@@ -1,0 +1,30 @@
+{
+  "cameras": [
+    { "name": "webcam_0", "source": 0 },
+    { "name": "test_video", "source": "videos/sample.mp4" }
+  ],
+  "yolo": {
+    "model": "yolov8n.pt",
+    "imgsz": 640,
+    "confidence": 0.5,
+    "device": "cpu"
+  },
+  "tracking": {
+    "type": "bytetrack",
+    "track_high_thresh": 0.6,
+    "track_low_thresh": 0.1,
+    "new_track_thresh": 0.7,
+    "max_age": 30,
+    "match_thresh": 0.8
+  },
+  "attendance": {
+    "grace_seconds": 900
+  },
+  "reports": {
+    "daily_time": "17:00",
+    "timezone": "Africa/Cairo",
+    "output_dir": "reports",
+    "filename_pattern": "report_%Y-%m-%d",
+    "formats": ["csv", "xlsx"]
+  }
+}

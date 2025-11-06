@@ -1,0 +1,23 @@
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "AES-256",
+    "key_file": "keys/encryption.key"
+  },
+  "authentication": {
+    "enabled": true,
+    "session_timeout": 3600,
+    "max_login_attempts": 3
+  },
+  "data_retention": {
+    "attendance_logs": 365,
+    "video_recordings": 30,
+    "reports": 180,
+    "audit_logs": 730
+  },
+  "privacy": {
+    "anonymize_videos": false,
+    "blur_faces": false,
+    "data_minimization": true
+  }
+}

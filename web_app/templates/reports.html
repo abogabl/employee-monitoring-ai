@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>التقارير</h3>
+<form method="post" action="{{ url_for('reports_generate') }}" class="row g-2">
+  <div class="col-md-3">
+    <label class="form-label">نوع التقرير</label>
+    <select name="type" class="form-select">
+      <option value="daily">تقرير يومي</option>
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">التاريخ</label>
+    <input type="date" name="date" value="{{ request.args.get('date', '') }}" class="form-control" />
+  </div>
+  <div class="col-md-3 align-self-end">
+    <button class="btn btn-primary">توليد</button>
+  </div>
+</form>
+<div class="mt-4">
+  <p>يمكن توسيع الصفحة لاحقاً لدعم تقارير الفترة/المقارنة والجداول الزمنية.</p>
+</div>
+{% endblock %}
