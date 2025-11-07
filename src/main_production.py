@@ -40,6 +40,7 @@ from tqdm import tqdm
 from .detection_tracking import PersonDetector, PersonTracker
 from .face_recognition_system import FaceRecognitionSystem
 from .activity_recognition import ActivityRecognizer
+from .reid import ReIDSystem
 from .attendance_system import AttendanceSystem
 from .attendance_manager import AttendanceManager
 from .performance_monitor import PerformanceMonitor
@@ -121,11 +122,27 @@ def main() -> None:
     frs = None
     if args.enable_face_recognition:
         try:
-            frs = FaceRecognitionSystem(model_name="buffalo_l", threshold=0.8)
+            # تحميل إعدادات التعرف على الوجوه من config إن وجدت
+            face_threshold = 0.7  # القيمة الافتراضية المُحسَّنة (كانت 0.8)
+            face_config_path = project_root / "config" / "face_recognition_config.json"
+            if face_config_path.exists():
+                try:
+                    face_cfg = json.loads(face_config_path.read_text(encoding="utf-8"))
+                    face_threshold = float(face_cfg.get("face_recognition", {}).get("threshold", face_threshold))
+                except Exception:
+                    pass
+            
+            frs = FaceRecognitionSystem(model_name="buffalo_l", threshold=face_threshold)
+            logger.info(f"Face Recognition threshold: {face_threshold}")
+            
             # تحميل التضمينات إن وُجدت
             enc_pkl = project_root / "models" / "face_encodings.pkl"
             if enc_pkl.exists():
                 frs.load_encodings(enc_pkl)
+                logger.info(f"Loaded {len(frs.encodings)} employees from {enc_pkl}")
+            else:
+                logger.warning(f"⚠️  ملف التضمينات غير موجود: {enc_pkl}")
+                logger.warning("💡 قم بتدريب النموذج أولاً: python train_faces.py")
         except Exception as e:
             errors.log_error(e, context="FaceRecognitionSystem init")
             frs = None
@@ -149,6 +166,9 @@ def main() -> None:
             attendance_sys = None
 
     time_tracker = TimeTracker(min_segment_duration=5)
+
+    # مكوّن ReID للمظهر
+    reid = ReIDSystem(device=args.device)
 
     # فتح المصدر
     cap = open_source(str(args.source))
@@ -233,37 +253,70 @@ def main() -> None:
                             # اختيار أفضل وجه داخل القص
                             best = max(faces, key=lambda f: float(f.get("det_score", 0.0)))
                             eid, sim, ename = frs.recognize_face(best["embedding"])  # type: ignore[index]
-                            # تطبيق التصويت فقط عند تشابه كافٍ
-                            if eid and sim is not None and float(sim) >= MIN_SIM:
-                                # زيادة تصويت المرشح
-                                recog_votes[tid][eid] += 1
-                                current = track_to_emp.get(tid)
-                                # إذا لا توجد هوية حالية واعتماد التصويت
-                                if current is None and recog_votes[tid][eid] >= SMOOTH_K:
-                                    emp_id = eid
-                                    track_to_emp[tid] = emp_id
-                                    name = ename or emp_id
-                                    track_display_name[tid] = name
-                                    for k in list(recog_votes[tid].keys()):
-                                        if k != eid:
-                                            recog_votes[tid][k] = 0
-                                # إذا كانت هناك هوية حالية مختلفة، لا نبدّل إلا بهوامش أعلى وتصويت كافٍ
-                                elif current is not None and current != eid:
-                                    if recog_votes[tid][eid] >= SMOOTH_K and float(sim) >= (MIN_SIM + MARGIN):
-                                        emp_id = eid
-                                        track_to_emp[tid] = emp_id
-                                        name = ename or emp_id
-                                        track_display_name[tid] = name
-                                        for k in list(recog_votes[tid].keys()):
-                                            if k != eid:
-                                                recog_votes[tid][k] = 0
-                            else:
-                                # في حال عدم ثقة كافية، لا نغيّر الهوية الحالية
-                                # تقليل بسيط للأصوات لتفادي تراكم قديم
-                                for k in list(recog_votes[tid].keys()):
-                                    recog_votes[tid][k] = max(0, recog_votes[tid][k] - 1)
+                            face_candidate = (eid, float(sim) if sim is not None else 0.0, ename)
                     except Exception as e:
                         errors.log_error(e, context="face_recognition")
+
+                # Appearance ReID: يُستخدم دائماً لمساعدة الاستقرار
+                x1, y1, x2, y2 = box
+                person_crop = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
+                reid_emb = reid.embed(person_crop)
+                reid_eid, reid_sim = reid.match(reid_emb)
+
+                # دمج الدرجات: نرجّح ReID لثبات أعلى، والوجه عند توفره
+                w_face, w_reid = 0.4, 0.6
+                candidate_id = None
+                combined_sim = 0.0
+                # استخلاص نتائج الوجه إن وُجدت
+                if 'face_candidate' in locals() and face_candidate[0]:
+                    fe_id, fe_sim, fe_name = face_candidate
+                    # إن لم توجد نتيجة ReID، نعتمد الوجه فقط
+                    if reid_eid is None:
+                        candidate_id, combined_sim, name = fe_id, fe_sim, (fe_name or fe_id)
+                    else:
+                        # إذا اختلفا، نقارن الدرجات المدمجة لكل مرشح
+                        scores: Dict[str, float] = {}
+                        scores[fe_id] = w_face * fe_sim + (w_reid * (reid_sim if reid_eid == fe_id else 0.0))
+                        scores[reid_eid] = w_face * (fe_sim if fe_id == reid_eid else 0.0) + w_reid * reid_sim
+                        candidate_id = max(scores.items(), key=lambda kv: kv[1])[0]
+                        combined_sim = scores[candidate_id]
+                        if candidate_id == fe_id:
+                            name = fe_name or fe_id
+                        else:
+                            name = candidate_id
+                else:
+                    # لا يوجد وجه موثوق؛ نعتمد ReID فقط
+                    candidate_id, combined_sim, name = (reid_eid, reid_sim, (reid_eid or "Unknown"))
+
+                # تثبيت عبر التصويت والهستيريِسِس باستخدام similarity المدمج
+                if candidate_id and combined_sim >= MIN_SIM:
+                    recog_votes[tid][candidate_id] += 1
+                    current = track_to_emp.get(tid)
+                    if current is None and recog_votes[tid][candidate_id] >= SMOOTH_K:
+                        emp_id = candidate_id
+                        track_to_emp[tid] = emp_id
+                        track_display_name[tid] = name
+                        for k in list(recog_votes[tid].keys()):
+                            if k != candidate_id:
+                                recog_votes[tid][k] = 0
+                    elif current is not None and current != candidate_id:
+                        if recog_votes[tid][candidate_id] >= SMOOTH_K and combined_sim >= (MIN_SIM + MARGIN):
+                            emp_id = candidate_id
+                            track_to_emp[tid] = emp_id
+                            track_display_name[tid] = name
+                            for k in list(recog_votes[tid].keys()):
+                                if k != candidate_id:
+                                    recog_votes[tid][k] = 0
+                else:
+                    for k in list(recog_votes[tid].keys()):
+                        recog_votes[tid][k] = max(0, recog_votes[tid][k] - 1)
+
+                # نمو المعرض تلقائياً: إذا ثبتت هوية من الوجه بدرجة عالية، أضف embedding الحالي
+                if 'face_candidate' in locals() and face_candidate[0] and face_candidate[1] >= (MIN_SIM + 0.1):
+                    try:
+                        reid.add_to_gallery(face_candidate[0], [reid_emb])
+                    except Exception as e:
+                        errors.log_error(e, context="reid_gallery_add")
 
                 # Activity Recognition (اختياري)
                 activity = "idle"
@@ -377,6 +430,11 @@ def main() -> None:
                 csv_text = time_tracker.export_segments(str(tid), format="csv")
                 seg_csv.write_text(csv_text, encoding="utf-8-sig")
                 logger.info("[AutoSave] Saved segments for track %s -> %s (total %.1fs)", tid, seg_csv, summary.get("total", 0.0))
+            # حفظ معرض ReID
+            try:
+                reid.save_gallery()
+            except Exception:
+                pass
         except Exception as e:
             errors.log_error(e, context="autosave")
         logger.info("Shutdown complete.")

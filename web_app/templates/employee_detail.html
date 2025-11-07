@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="mb-3">
+  <a href="{{ url_for('employees_page') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-right me-1"></i>العودة للقائمة
+  </a>
+</div>
+
+<div class="row">
+  <!-- معلومات الموظف -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body text-center">
+        {% if employee.get('photo') %}
+        <img src="{{ url_for('static', filename=employee.photo) }}" class="employee-avatar-lg mb-3" alt="{{ employee.name }}">
+        {% else %}
+        <div class="employee-avatar-placeholder mx-auto mb-3" style="width: 120px; height: 120px; font-size: 3rem; border-radius: 12px;">
+          {{ employee.name[0]|upper }}
+        </div>
+        {% endif %}
+        
+        <h3 class="mb-1">{{ employee.name }}</h3>
+        <p class="text-muted mb-2">{{ employee.emp_id }}</p>
+        
+        {% if employee.get('active', True) %}
+        <span class="badge bg-success mb-3">
+          <i class="bi bi-check-circle me-1"></i>نشط
+        </span>
+        {% else %}
+        <span class="badge bg-secondary mb-3">
+          <i class="bi bi-x-circle me-1"></i>غير نشط
+        </span>
+        {% endif %}
+        
+        <hr>
+        
+        <div class="text-start">
+          <div class="mb-3">
+            <strong><i class="bi bi-building me-2"></i>القسم:</strong>
+            <div class="mt-1">
+              {% if employee.get('department') %}
+              <span class="badge bg-info">{{ employee.department }}</span>
+              {% else %}
+              <span class="text-muted">غير محدد</span>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <strong><i class="bi bi-briefcase me-2"></i>الوظيفة:</strong>
+            <div class="mt-1">{{ employee.get('position', 'غير محدد') }}</div>
+          </div>
+          
+          <div class="mb-3">
+            <strong><i class="bi bi-calendar me-2"></i>تاريخ التعيين:</strong>
+            <div class="mt-1">{{ employee.get('hire_date', 'غير محدد') }}</div>
+          </div>
+        </div>
+        
+        <hr>
+        
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal">
+            <i class="bi bi-pencil-fill me-1"></i>تعديل البيانات
+          </button>
+          <button class="btn btn-outline-danger" onclick="confirmDelete()">
+            <i class="bi bi-trash-fill me-1"></i>حذف الموظف
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- الإحصائيات والحضور -->
+  <div class="col-md-8">
+    <!-- إحصائيات سريعة -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="stat-card success">
+          <i class="bi bi-calendar-check-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+          <h3 class="stat-value">{{ attendance_today|length }}</h3>
+          <p class="stat-label mb-0">سجلات اليوم</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stat-card info">
+          <i class="bi bi-clock-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+          <h3 class="stat-value">
+            {% if attendance_today %}
+            {{ attendance_today[0].get('check_in_time', '-') }}
+            {% else %}
+            -
+            {% endif %}
+          </h3>
+          <p class="stat-label mb-0">وقت الدخول</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stat-card warning">
+          <i class="bi bi-clock-history stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+          <h3 class="stat-value">
+            {% if attendance_today and attendance_today[0].get('check_out_time') %}
+            {{ attendance_today[0].get('check_out_time') }}
+            {% else %}
+            -
+            {% endif %}
+          </h3>
+          <p class="stat-label mb-0">وقت الخروج</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- سجل الحضور اليوم -->
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-calendar-day me-2"></i>سجل الحضور اليوم</h5>
+      </div>
+      <div class="card-body">
+        {% if attendance_today %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>وقت الدخول</th>
+                <th>وقت الخروج</th>
+                <th>ساعات العمل</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in attendance_today %}
+              <tr>
+                <td><i class="bi bi-box-arrow-in-right text-success me-1"></i>{{ record.get('check_in_time', '-') }}</td>
+                <td>
+                  {% if record.get('check_out_time') %}
+                  <i class="bi bi-box-arrow-left text-danger me-1"></i>{{ record.check_out_time }}
+                  {% else %}
+                  <span class="badge bg-success">متواجد الآن</span>
+                  {% endif %}
+                </td>
+                <td>{{ record.get('work_hours', 0)|round(2) }} ساعة</td>
+                <td>
+                  {% if record.get('late') %}
+                  <span class="badge bg-warning">متأخر</span>
+                  {% else %}
+                  <span class="badge bg-success">في الموعد</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+          <i class="bi bi-calendar-x display-4 text-muted"></i>
+          <p class="mt-3 text-muted">لا توجد سجلات حضور لهذا اليوم</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- معلومات إضافية -->
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>معلومات إضافية</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>مسار صور التدريب:</strong></p>
+            <code>employees_database/faces/{{ employee.emp_id }}/</code>
+            
+            <p class="mt-3"><strong>حالة التدريب على الوجه:</strong></p>
+            <span class="badge bg-info">قيد الانتظار</span>
+            <p class="small text-muted mt-1">يرجى إضافة الصور وتشغيل train_faces.py</p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>تاريخ الإضافة للنظام:</strong></p>
+            <p>{{ employee.get('created_at', 'غير محدد') }}</p>
+            
+            <p class="mt-3"><strong>آخر تحديث:</strong></p>
+            <p>{{ employee.get('updated_at', 'غير محدد') }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج التعديل -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('employees_edit') }}" enctype="multipart/form-data">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>تعديل بيانات الموظف</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 text-center">
+              <label class="form-label fw-bold">تحديث الصورة الشخصية</label>
+              <div class="mb-3">
+                {% if employee.get('photo') %}
+                <img src="{{ url_for('static', filename=employee.photo) }}" class="employee-avatar-lg" alt="{{ employee.name }}">
+                {% endif %}
+              </div>
+              <input type="file" name="photo" accept="image/*" class="form-control">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">معرف الموظف</label>
+              <input name="emp_id" class="form-control" value="{{ employee.emp_id }}" readonly required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">الاسم الكامل</label>
+              <input name="name" class="form-control" value="{{ employee.name }}" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">القسم</label>
+              <input name="department" class="form-control" value="{{ employee.get('department', '') }}">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">الوظيفة</label>
+              <input name="position" class="form-control" value="{{ employee.get('position', '') }}">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">تاريخ التعيين</label>
+              <input name="hire_date" type="date" class="form-control" value="{{ employee.get('hire_date', '') }}">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">الحالة</label>
+              <select name="active" class="form-select">
+                <option value="true" {% if employee.get('active', True) %}selected{% endif %}>نشط</option>
+                <option value="false" {% if not employee.get('active', True) %}selected{% endif %}>غير نشط</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج الحذف -->
+<form id="deleteForm" method="post" action="{{ url_for('employees_delete') }}" style="display: none;">
+  <input type="hidden" name="emp_id" value="{{ employee.emp_id }}">
+</form>
+
+<script>
+function confirmDelete() {
+  if (confirm('هل أنت متأكد من حذف الموظف "{{ employee.name }}"؟\n\nلا يمكن التراجع عن هذا الإجراء.')) {
+    document.getElementById('deleteForm').submit();
+  }
+}
+</script>
+{% endblock %}

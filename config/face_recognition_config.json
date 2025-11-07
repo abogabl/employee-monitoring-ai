@@ -1,0 +1,50 @@
+{
+  "face_recognition": {
+    "enabled": true,
+    "model_name": "buffalo_l",
+    "threshold": 0.7,
+    "det_size": [640, 640],
+    "providers": ["CPUExecutionProvider"],
+    "encodings_file": "models/face_encodings.pkl",
+    "faces_directory": "employees_database/faces/"
+  },
+  "recognition_settings": {
+    "min_similarity": 0.7,
+    "min_face_size": 50,
+    "max_faces_per_frame": 10,
+    "smooth_k": 5,
+    "margin": 0.05,
+    "min_detection_score": 0.5
+  },
+  "reid_settings": {
+    "enabled": true,
+    "weight_face": 0.4,
+    "weight_reid": 0.6,
+    "gallery_file": "models/reid_gallery.pkl"
+  },
+  "quality_requirements": {
+    "min_image_size": 200,
+    "min_brightness": 40,
+    "max_brightness": 220,
+    "min_sharpness": 100,
+    "min_face_ratio": 10
+  },
+  "training": {
+    "min_images_per_employee": 3,
+    "recommended_images": 7,
+    "max_images_per_training": 15,
+    "supported_formats": [".jpg", ".jpeg", ".png", ".bmp"],
+    "check_quality_on_training": true
+  },
+  "performance": {
+    "use_threading": false,
+    "max_threads": 2,
+    "face_detection_interval": 1,
+    "cache_embeddings": true
+  },
+  "alerts": {
+    "unknown_face_threshold": 10,
+    "send_alert_on_unknown": false,
+    "log_all_detections": true
+  }
+}

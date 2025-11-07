@@ -1,21 +1,38 @@
-{% extends 'base.html' %}
+{% extends 'base_public.html' %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-4">
-    <div class="card">
-      <div class="card-body">
-        <h4 class="card-title">تسجيل الدخول</h4>
+<div class="row justify-content-center align-items-center min-vh-100">
+  <div class="col-md-5 col-lg-4">
+    <div class="card shadow-lg border-0 rounded-lg">
+      <div class="card-header bg-primary text-white text-center py-4">
+        <i class="bi bi-shield-lock fs-1"></i>
+        <h3 class="fw-bold mt-2 mb-0">نظام مراقبة الموظفين</h3>
+        <p class="mb-0 mt-1 opacity-75">Employee Monitoring System</p>
+      </div>
+      <div class="card-body p-4">
+        <h5 class="card-title text-center mb-4">تسجيل الدخول</h5>
         <form method="post">
           <div class="mb-3">
-            <label class="form-label">اسم المستخدم</label>
-            <input name="username" class="form-control" required />
+            <label class="form-label fw-semibold">
+              <i class="bi bi-person-fill me-1"></i>اسم المستخدم
+            </label>
+            <input name="username" class="form-control form-control-lg" placeholder="أدخل اسم المستخدم" required autofocus />
           </div>
-          <div class="mb-3">
-            <label class="form-label">كلمة المرور</label>
-            <input name="password" type="password" class="form-control" required />
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-key-fill me-1"></i>كلمة المرور
+            </label>
+            <input name="password" type="password" class="form-control form-control-lg" placeholder="أدخل كلمة المرور" required />
           </div>
-          <button class="btn btn-primary">دخول</button>
+          <button class="btn btn-primary btn-lg w-100 fw-bold">
+            <i class="bi bi-box-arrow-in-left me-2"></i>دخول
+          </button>
         </form>
+      </div>
+      <div class="card-footer text-center py-3 bg-light">
+        <small class="text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          المستخدمون الافتراضيون: admin, manager, operator, viewer
+        </small>
       </div>
     </div>
   </div>

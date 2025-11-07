@@ -1,45 +1,417 @@
 {% extends 'base.html' %}
 {% block content %}
-<h3>الكاميرات</h3>
-<table class="table table-striped table-sm">
-  <thead><tr><th>ID</th><th>Name</th><th>Source</th><th>Device</th><th>Enabled</th><th>Location</th><th>Priority</th><th>Status</th><th>Controls</th></tr></thead>
-  <tbody>
-    {% for c in cameras %}
-    {% set st = status.get(c.id|string, {}) %}
-    <tr>
-      <td>{{ c.id }}</td>
-      <td>{{ c.name }}</td>
-      <td class="text-truncate" style="max-width:240px">{{ c.source }}</td>
-      <td>{{ c.device }}</td>
-      <td>{{ 'Yes' if c.enabled else 'No' }}</td>
-      <td>{{ c.location }}</td>
-      <td>{{ c.priority }}</td>
-      <td>
-        {% if st %}
-          {{ 'Running' if st.running else 'Stopped' }} | {{ st.health.message or '' }}
-        {% else %}
-          -
-        {% endif %}
-      </td>
-      <td>
-        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
-          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
-          <input type="hidden" name="action" value="start"/>
-          <button class="btn btn-sm btn-success">تشغيل</button>
-        </form>
-        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
-          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
-          <input type="hidden" name="action" value="restart"/>
-          <button class="btn btn-sm btn-warning">إعادة تشغيل</button>
-        </form>
-        <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
-          <input type="hidden" name="camera_id" value="{{ c.id }}"/>
-          <input type="hidden" name="action" value="stop"/>
-          <button class="btn btn-sm btn-danger">إيقاف</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-camera-video-fill me-2"></i>إدارة الكاميرات</h2>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+    <i class="bi bi-plus-circle-fill me-2"></i>إضافة كاميرا جديدة
+  </button>
+</div>
+
+<!-- إحصائيات سريعة -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="stat-card primary">
+      <i class="bi bi-camera-video-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ cameras|length }}</h2>
+      <p class="stat-label mb-0">إجمالي الكاميرات</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card success">
+      <i class="bi bi-play-circle-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ cameras|selectattr('enabled')|list|length }}</h2>
+      <p class="stat-label mb-0">كاميرات مفعّلة</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card info">
+      <i class="bi bi-activity stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="activeCount">-</h2>
+      <p class="stat-label mb-0">كاميرات نشطة</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card warning">
+      <i class="bi bi-exclamation-triangle-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="errorCount">-</h2>
+      <p class="stat-label mb-0">بها مشاكل</p>
+    </div>
+  </div>
+</div>
+
+<!-- قائمة الكاميرات -->
+<div class="card">
+  <div class="card-body">
+    {% if cameras %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>الاسم</th>
+            <th>المصدر</th>
+            <th>الموقع</th>
+            <th>الحالة</th>
+            <th>الصحة</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in cameras %}
+          {% set st = status.get(c.id|string, {}) %}
+          <tr>
+            <td><strong>{{ c.id }}</strong></td>
+            <td>
+              <i class="bi bi-camera-video me-1"></i>{{ c.name }}
+              {% if c.enabled %}
+              <span class="badge bg-success ms-2">مفعّلة</span>
+              {% else %}
+              <span class="badge bg-secondary ms-2">معطّلة</span>
+              {% endif %}
+            </td>
+            <td>
+              <code class="small">{{ c.source[:40] }}{% if c.source|length > 40 %}...{% endif %}</code>
+            </td>
+            <td>
+              {% if c.location %}
+              <span class="badge bg-info">{{ c.location }}</span>
+              {% else %}
+              <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if st %}
+                {% if st.running %}
+                <span class="badge bg-success">
+                  <i class="bi bi-play-circle-fill me-1"></i>تعمل
+                </span>
+                {% else %}
+                <span class="badge bg-danger">
+                  <i class="bi bi-stop-circle-fill me-1"></i>متوقفة
+                </span>
+                {% endif %}
+              {% else %}
+              <span class="badge bg-secondary">غير نشطة</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if st and st.running %}
+                {% if st.health.ok %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>جيدة</span>
+                {% else %}
+                <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>مشكلة</span>
+                {% endif %}
+                {% if st.health.message %}
+                <br><small class="text-muted">{{ st.health.message }}</small>
+                {% endif %}
+              {% else %}
+              <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <!-- زر تشغيل -->
+                <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+                  <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+                  <input type="hidden" name="action" value="start"/>
+                  <button class="btn btn-success" title="تشغيل" {% if st and st.running %}disabled{% endif %}>
+                    <i class="bi bi-play-fill"></i>
+                  </button>
+                </form>
+                
+                <!-- زر إعادة تشغيل -->
+                <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+                  <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+                  <input type="hidden" name="action" value="restart"/>
+                  <button class="btn btn-warning" title="إعادة تشغيل">
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
+                </form>
+                
+                <!-- زر إيقاف -->
+                <form method="post" action="{{ url_for('cameras_control') }}" class="d-inline">
+                  <input type="hidden" name="camera_id" value="{{ c.id }}"/>
+                  <input type="hidden" name="action" value="stop"/>
+                  <button class="btn btn-danger" title="إيقاف" {% if st and not st.running %}disabled{% endif %}>
+                    <i class="bi bi-stop-fill"></i>
+                  </button>
+                </form>
+              </div>
+              
+              <!-- أزرار التعديل والحذف -->
+              <div class="btn-group btn-group-sm ms-2">
+                <button type="button" class="btn btn-outline-primary" title="تعديل" 
+                        data-camera-id="{{ c.id }}"
+                        data-camera-name="{{ c.name }}"
+                        data-camera-source="{{ c.source }}"
+                        data-camera-enabled="{{ c.enabled }}"
+                        data-camera-device="{{ c.device }}"
+                        data-camera-location="{{ c.get('location', '') }}"
+                        data-camera-priority="{{ c.get('priority', 2) }}"
+                        data-camera-fps="{{ c.get('fps', 25) }}"
+                        onclick="editCamera(this)">
+                  <i class="bi bi-pencil-fill"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger" title="حذف" 
+                        onclick="deleteCamera('{{ c.id }}', '{{ c.name }}')">
+                  <i class="bi bi-trash-fill"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-camera-video-off display-1 text-muted"></i>
+      <h4 class="mt-3 text-muted">لا توجد كاميرات</h4>
+      <p class="text-muted">ابدأ بإضافة كاميرا جديدة</p>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+        <i class="bi bi-plus-circle me-1"></i>إضافة كاميرا
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- نموذج إضافة كاميرا -->
+<div class="modal fade" id="addCameraModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('camera_add') }}">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة كاميرا جديدة</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-hash me-1"></i>معرف الكاميرا (ID) *
+              </label>
+              <input name="camera_id" class="form-control" placeholder="مثال: cam_01" required pattern="[a-zA-Z0-9_-]+">
+              <small class="text-muted">أحرف وأرقام فقط بدون مسافات</small>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-camera-video me-1"></i>اسم الكاميرا *
+              </label>
+              <input name="name" class="form-control" placeholder="مثال: كاميرا المدخل" required>
+            </div>
+            
+            <div class="col-12">
+              <label class="form-label fw-bold">
+                <i class="bi bi-link-45deg me-1"></i>مصدر الكاميرا (Source) *
+              </label>
+              <select class="form-select mb-2" id="sourceType" onchange="updateSourceInput()">
+                <option value="usb">كاميرا USB/Webcam</option>
+                <option value="rtsp">كاميرا IP (RTSP)</option>
+                <option value="http">كاميرا HTTP/MJPEG</option>
+                <option value="file">ملف فيديو</option>
+                <option value="custom">مخصص</option>
+              </select>
+              <input name="source" id="sourceInput" class="form-control" placeholder="0" required>
+              <small class="text-muted" id="sourceHelp">0 = الكاميرا الأولى، 1 = الثانية...</small>
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">
+                <i class="bi bi-geo-alt me-1"></i>الموقع
+              </label>
+              <input name="location" class="form-control" placeholder="مثال: الطابق الأول">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">
+                <i class="bi bi-speedometer me-1"></i>FPS
+              </label>
+              <input name="fps" type="number" class="form-control" value="25" min="1" max="60">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">
+                <i class="bi bi-sort-numeric-down me-1"></i>الأولوية
+              </label>
+              <select name="priority" class="form-select">
+                <option value="1">عالية</option>
+                <option value="2" selected>متوسطة</option>
+                <option value="3">منخفضة</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-toggle-on me-1"></i>الحالة
+              </label>
+              <select name="enabled" class="form-select">
+                <option value="true" selected>مفعّلة</option>
+                <option value="false">معطّلة</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-cpu me-1"></i>الجهاز
+              </label>
+              <select name="device" class="form-select">
+                <option value="cpu" selected>CPU</option>
+                <option value="cuda">GPU (CUDA)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-circle me-1"></i>إلغاء
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-1"></i>إضافة
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج تعديل كاميرا -->
+<div class="modal fade" id="editCameraModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('camera_edit') }}">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل الكاميرا</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="camera_id" id="edit_camera_id">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">اسم الكاميرا *</label>
+              <input name="name" id="edit_name" class="form-control" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">المصدر *</label>
+              <input name="source" id="edit_source" class="form-control" required>
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">الموقع</label>
+              <input name="location" id="edit_location" class="form-control">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">FPS</label>
+              <input name="fps" id="edit_fps" type="number" class="form-control">
+            </div>
+            
+            <div class="col-md-4">
+              <label class="form-label fw-bold">الأولوية</label>
+              <select name="priority" id="edit_priority" class="form-select">
+                <option value="1">عالية</option>
+                <option value="2">متوسطة</option>
+                <option value="3">منخفضة</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">الحالة</label>
+              <select name="enabled" id="edit_enabled" class="form-select">
+                <option value="true">مفعّلة</option>
+                <option value="false">معطّلة</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">الجهاز</label>
+              <select name="device" id="edit_device" class="form-select">
+                <option value="cpu">CPU</option>
+                <option value="cuda">GPU (CUDA)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="submit" class="btn btn-warning">حفظ التغييرات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج حذف -->
+<form id="deleteForm" method="post" style="display: none;">
+  <input type="hidden" name="camera_id" id="delete_camera_id">
+</form>
+
+<script>
+// تحديث حقل المصدر حسب النوع
+function updateSourceInput() {
+  const type = document.getElementById('sourceType').value;
+  const input = document.getElementById('sourceInput');
+  const help = document.getElementById('sourceHelp');
+  
+  switch(type) {
+    case 'usb':
+      input.placeholder = '0';
+      input.value = '0';
+      help.textContent = '0 = الكاميرا الأولى، 1 = الثانية...';
+      break;
+    case 'rtsp':
+      input.placeholder = 'rtsp://username:password@192.168.1.100:554/stream';
+      input.value = 'rtsp://admin:pass@192.168.1.100:554/stream';
+      help.textContent = 'مثال: rtsp://admin:pass@192.168.1.100:554/stream';
+      break;
+    case 'http':
+      input.placeholder = 'http://192.168.1.100/video.mjpeg';
+      input.value = 'http://192.168.1.100/video.mjpeg';
+      help.textContent = 'مثال: http://192.168.1.100/video.mjpeg';
+      break;
+    case 'file':
+      input.placeholder = 'videos/test.mp4';
+      input.value = 'videos/test.mp4';
+      help.textContent = 'مسار الملف نسبي أو مطلق';
+      break;
+    case 'custom':
+      input.placeholder = 'أدخل المصدر المخصص';
+      input.value = '';
+      help.textContent = 'أي مصدر مدعوم من OpenCV';
+      break;
+  }
+}
+
+// تعديل كاميرا
+function editCamera(button) {
+  const dataset = button.dataset;
+  document.getElementById('edit_camera_id').value = dataset.cameraId;
+  document.getElementById('edit_name').value = dataset.cameraName || '';
+  document.getElementById('edit_source').value = dataset.cameraSource || '';
+  document.getElementById('edit_location').value = dataset.cameraLocation || '';
+  document.getElementById('edit_fps').value = dataset.cameraFps || 25;
+  document.getElementById('edit_priority').value = dataset.cameraPriority || 2;
+  document.getElementById('edit_enabled').value = dataset.cameraEnabled === 'True' ? 'true' : 'false';
+  document.getElementById('edit_device').value = dataset.cameraDevice || 'cpu';
+  
+  new bootstrap.Modal(document.getElementById('editCameraModal')).show();
+}
+
+// حذف كاميرا
+function deleteCamera(id, name) {
+  if (confirm(`هل أنت متأكد من حذف الكاميرا "${name}"؟\n\nلا يمكن التراجع عن هذا الإجراء.`)) {
+    const form = document.getElementById('deleteForm');
+    document.getElementById('delete_camera_id').value = id;
+    form.action = "{{ url_for('camera_delete') }}";
+    form.submit();
+  }
+}
+
+// تحديث الإحصائيات
+function updateStats() {
+  // يمكن إضافة تحديث عبر AJAX هنا
+}
+</script>
 {% endblock %}

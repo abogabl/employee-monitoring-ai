@@ -1,58 +1,292 @@
 {% extends 'base.html' %}
 {% block content %}
-<h3>الموظفون</h3>
-<div class="row">
-  <div class="col-md-6">
-    <h5>إضافة/تعديل موظف</h5>
-    <form method="post" action="{{ url_for('employees_add') }}" class="row g-2">
-      <div class="col-md-4">
-        <label class="form-label">المعرف</label>
-        <input name="emp_id" class="form-control" required />
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-people-fill me-2"></i>إدارة الموظفين</h2>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
+    <i class="bi bi-person-plus-fill me-2"></i>إضافة موظف جديد
+  </button>
+</div>
+
+<!-- شريط البحث والفلترة -->
+<div class="search-filter-bar">
+  <form method="get" class="row g-3">
+    <div class="col-md-5">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" name="search" class="form-control" placeholder="ابحث بالاسم أو المعرف..." value="{{ search }}">
       </div>
-      <div class="col-md-8">
-        <label class="form-label">الاسم</label>
-        <input name="name" class="form-control" required />
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">القسم</label>
-        <input name="department" class="form-control" />
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">الوظيفة</label>
-        <input name="position" class="form-control" />
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">تاريخ التعيين</label>
-        <input name="hire_date" type="date" class="form-control" />
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">نشط</label>
-        <select name="active" class="form-select">
-          <option value="true" selected>نعم</option>
-          <option value="false">لا</option>
-        </select>
-      </div>
-      <div class="col-12">
-        <button class="btn btn-primary">حفظ</button>
-      </div>
-    </form>
-  </div>
-  <div class="col-md-6">
-    <h5>قائمة الموظفين</h5>
-    <table class="table table-sm table-striped">
-      <thead><tr><th>EMP ID</th><th>الاسم</th><th>القسم</th><th>الوظيفة</th><th>نشط</th></tr></thead>
-      <tbody>
-        {% for e in employees %}
-        <tr>
-          <td>{{ e.emp_id }}</td>
-          <td>{{ e.name }}</td>
-          <td>{{ e.get('department','') }}</td>
-          <td>{{ e.get('position','') }}</td>
-          <td>{{ 'Yes' if e.get('active', True) else 'No' }}</td>
-        </tr>
+    </div>
+    <div class="col-md-3">
+      <select name="department" class="form-select">
+        <option value="">كل الأقسام</option>
+        {% for dept in departments %}
+        <option value="{{ dept }}" {% if dept == department %}selected{% endif %}>{{ dept }}</option>
         {% endfor %}
-      </tbody>
-    </table>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary w-100">
+        <i class="bi bi-funnel-fill me-1"></i>تطبيق
+      </button>
+    </div>
+    <div class="col-md-2">
+      <a href="{{ url_for('employees_page') }}" class="btn btn-secondary w-100">
+        <i class="bi bi-x-circle me-1"></i>إلغاء
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- إحصائيات سريعة -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="stat-card primary">
+      <i class="bi bi-people-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ all_employees|length }}</h2>
+      <p class="stat-label mb-0">إجمالي الموظفين</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card success">
+      <i class="bi bi-check-circle-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ all_employees|selectattr('active')|list|length }}</h2>
+      <p class="stat-label mb-0">موظفون نشطون</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card info">
+      <i class="bi bi-building stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ departments|length }}</h2>
+      <p class="stat-label mb-0">عدد الأقسام</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card warning">
+      <i class="bi bi-funnel-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ employees|length }}</h2>
+      <p class="stat-label mb-0">نتائج البحث</p>
+    </div>
   </div>
 </div>
+
+<!-- قائمة الموظفين -->
+<div class="card">
+  <div class="card-body">
+    {% if employees %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>الصورة</th>
+            <th>المعرف</th>
+            <th>الاسم</th>
+            <th>القسم</th>
+            <th>الوظيفة</th>
+            <th>تاريخ التعيين</th>
+            <th>الحالة</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in employees %}
+          <tr>
+            <td>
+              {% if e.get('photo') %}
+              <img src="{{ url_for('static', filename=e.photo) }}" class="employee-avatar" alt="{{ e.name }}">
+              {% else %}
+              <div class="employee-avatar-placeholder">
+                {{ e.name[0]|upper }}
+              </div>
+              {% endif %}
+            </td>
+            <td><strong>{{ e.emp_id }}</strong></td>
+            <td>{{ e.name }}</td>
+            <td>
+              {% if e.get('department') %}
+              <span class="badge bg-info">{{ e.department }}</span>
+              {% else %}
+              <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>{{ e.get('position', '-') }}</td>
+            <td>{{ e.get('hire_date', '-') }}</td>
+            <td>
+              {% if e.get('active', True) %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>نشط</span>
+              {% else %}
+              <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>غير نشط</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('employee_detail', emp_id=e.emp_id) }}" class="btn btn-outline-primary" title="عرض التفاصيل">
+                  <i class="bi bi-eye-fill"></i>
+                </a>
+                <button class="btn btn-outline-danger" onclick="confirmDelete('{{ e.emp_id }}', '{{ e.name }}')" title="حذف">
+                  <i class="bi bi-trash-fill"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-inbox display-1 text-muted"></i>
+      <h4 class="mt-3 text-muted">لا توجد نتائج</h4>
+      <p class="text-muted">جرب تغيير معايير البحث</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- نموذج إضافة موظف -->
+<div class="modal fade" id="addEmployeeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('employees_add') }}" enctype="multipart/form-data">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i>إضافة موظف جديد</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <!-- الصورة الشخصية -->
+            <div class="col-12 text-center">
+              <label class="form-label fw-bold">الصورة الشخصية</label>
+              <div class="image-upload-area" id="imageUploadArea">
+                <i class="bi bi-cloud-upload display-4 text-muted"></i>
+                <p class="mt-2 mb-1">اسحب الصورة هنا أو انقر للاختيار</p>
+                <small class="text-muted">JPG, PNG - حجم أقصى 5MB</small>
+                <input type="file" name="photo" id="photoInput" accept="image/*" class="d-none">
+              </div>
+              <img id="imagePreview" class="preview-image d-none" alt="معاينة">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-hash me-1"></i>معرف الموظف *
+              </label>
+              <input name="emp_id" class="form-control" placeholder="مثال: EMP001" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-person me-1"></i>الاسم الكامل *
+              </label>
+              <input name="name" class="form-control" placeholder="مثال: أحمد محمد" required>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-building me-1"></i>القسم
+              </label>
+              <input name="department" class="form-control" placeholder="مثال: تقنية المعلومات" list="departmentsList">
+              <datalist id="departmentsList">
+                {% for dept in departments %}
+                <option value="{{ dept }}">
+                {% endfor %}
+              </datalist>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-briefcase me-1"></i>الوظيفة
+              </label>
+              <input name="position" class="form-control" placeholder="مثال: مطور برمجيات">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-calendar me-1"></i>تاريخ التعيين
+              </label>
+              <input name="hire_date" type="date" class="form-control">
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label fw-bold">
+                <i class="bi bi-toggle-on me-1"></i>الحالة
+              </label>
+              <select name="active" class="form-select">
+                <option value="true" selected>نشط</option>
+                <option value="false">غير نشط</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-circle me-1"></i>إلغاء
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-1"></i>حفظ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج حذف -->
+<form id="deleteForm" method="post" style="display: none;">
+  <input type="hidden" name="emp_id" id="deleteEmpId">
+</form>
+
+<script>
+// معاينة الصورة
+const imageUploadArea = document.getElementById('imageUploadArea');
+const photoInput = document.getElementById('photoInput');
+const imagePreview = document.getElementById('imagePreview');
+
+imageUploadArea.addEventListener('click', () => photoInput.click());
+
+photoInput.addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      imagePreview.src = e.target.result;
+      imagePreview.classList.remove('d-none');
+    }
+    reader.readAsDataURL(file);
+  }
+});
+
+// السحب والإفلات
+imageUploadArea.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  imageUploadArea.classList.add('dragging');
+});
+
+imageUploadArea.addEventListener('dragleave', () => {
+  imageUploadArea.classList.remove('dragging');
+});
+
+imageUploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  imageUploadArea.classList.remove('dragging');
+  
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    photoInput.files = e.dataTransfer.files;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      imagePreview.src = e.target.result;
+      imagePreview.classList.remove('d-none');
+    }
+    reader.readAsDataURL(file);
+  }
+});
+
+// حذف موظف
+function confirmDelete(empId, empName) {
+  if (confirm(`هل أنت متأكد من حذف الموظف "${empName}"؟\n\nلا يمكن التراجع عن هذا الإجراء.`)) {
+    const form = document.getElementById('deleteForm');
+    form.action = `/employees/${empId}/delete`;
+    form.submit();
+  }
+}
+</script>
 {% endblock %}

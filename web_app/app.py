@@ -13,9 +13,11 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
-from typing import Dict, Generator
+from typing import Dict, Generator, List
+import os
+from werkzeug.utils import secure_filename
 
-from flask import Flask, Response, flash, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, redirect, render_template, request, send_from_directory, session, url_for
 
 from src.attendance_system import AttendanceSystem
 from src.employee_manager import EmployeeDatabase
@@ -86,11 +88,171 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
         elif action == "restart":
             runner.restart_camera(cam_id)
         return redirect(url_for("cameras"))
+    
+    @app.post("/cameras/add")
+    @login_required(role="admin")
+    def camera_add():
+        """إضافة كاميرا جديدة"""
+        try:
+            # قراءة التكوين الحالي
+            config_path = Path("config/cameras_config.json")
+            if config_path.exists():
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+            else:
+                config = {"cameras": []}
+            
+            # إنشاء كاميرا جديدة
+            new_camera = {
+                "id": request.form.get("camera_id", "").strip(),
+                "name": request.form.get("name", "").strip(),
+                "source": request.form.get("source", "").strip(),
+                "enabled": request.form.get("enabled", "true") == "true",
+                "device": request.form.get("device", "cpu"),
+                "location": request.form.get("location", "").strip(),
+                "priority": int(request.form.get("priority", 2)),
+                "fps": int(request.form.get("fps", 25))
+            }
+            
+            # تحويل المصدر إلى رقم إذا كان رقماً
+            try:
+                new_camera["source"] = int(new_camera["source"])
+            except ValueError:
+                pass  # إبقائه كنص (RTSP, HTTP, إلخ)
+            
+            # التحقق من عدم تكرار المعرف
+            if any(c.get("id") == new_camera["id"] for c in config.get("cameras", [])):
+                flash(f"الكاميرا بمعرف {new_camera['id']} موجودة بالفعل", "danger")
+                return redirect(url_for("cameras"))
+            
+            # إضافة الكاميرا
+            if "cameras" not in config:
+                config["cameras"] = []
+            config["cameras"].append(new_camera)
+            
+            # حفظ التكوين
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+            
+            # إعادة تحميل التكوين
+            runner.config = config
+            
+            flash(f"تم إضافة الكاميرا '{new_camera['name']}' بنجاح", "success")
+        except Exception as e:
+            flash(f"فشل إضافة الكاميرا: {e}", "danger")
+        
+        return redirect(url_for("cameras"))
+    
+    @app.post("/cameras/edit")
+    @login_required(role="admin")
+    def camera_edit():
+        """تعديل كاميرا موجودة"""
+        try:
+            camera_id = request.form.get("camera_id", "").strip()
+            
+            # قراءة التكوين
+            config_path = Path("config/cameras_config.json")
+            if not config_path.exists():
+                flash("ملف التكوين غير موجود", "danger")
+                return redirect(url_for("cameras"))
+            
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            
+            # البحث عن الكاميرا
+            camera = next((c for c in config.get("cameras", []) if c.get("id") == camera_id), None)
+            if not camera:
+                flash(f"الكاميرا {camera_id} غير موجودة", "danger")
+                return redirect(url_for("cameras"))
+            
+            # تحديث البيانات
+            camera["name"] = request.form.get("name", "").strip()
+            camera["source"] = request.form.get("source", "").strip()
+            camera["enabled"] = request.form.get("enabled", "true") == "true"
+            camera["device"] = request.form.get("device", "cpu")
+            camera["location"] = request.form.get("location", "").strip()
+            camera["priority"] = int(request.form.get("priority", 2))
+            camera["fps"] = int(request.form.get("fps", 25))
+            
+            # تحويل المصدر إلى رقم إذا كان رقماً
+            try:
+                camera["source"] = int(camera["source"])
+            except ValueError:
+                pass
+            
+            # حفظ التكوين
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+            
+            # إعادة تحميل التكوين
+            runner.config = config
+            
+            flash(f"تم تحديث الكاميرا '{camera['name']}' بنجاح", "success")
+        except Exception as e:
+            flash(f"فشل تحديث الكاميرا: {e}", "danger")
+        
+        return redirect(url_for("cameras"))
+    
+    @app.post("/cameras/delete")
+    @login_required(role="admin")
+    def camera_delete():
+        """حذف كاميرا"""
+        try:
+            camera_id = request.form.get("camera_id", "").strip()
+            
+            # قراءة التكوين
+            config_path = Path("config/cameras_config.json")
+            if not config_path.exists():
+                flash("ملف التكوين غير موجود", "danger")
+                return redirect(url_for("cameras"))
+            
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            
+            # إيقاف الكاميرا أولاً إذا كانت تعمل
+            try:
+                runner.stop_camera(camera_id)
+            except:
+                pass
+            
+            # حذف الكاميرا
+            original_count = len(config.get("cameras", []))
+            config["cameras"] = [c for c in config.get("cameras", []) if c.get("id") != camera_id]
+            
+            if len(config["cameras"]) == original_count:
+                flash(f"الكاميرا {camera_id} غير موجودة", "warning")
+            else:
+                # حفظ التكوين
+                config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+                
+                # إعادة تحميل التكوين
+                runner.config = config
+                
+                flash(f"تم حذف الكاميرا {camera_id} بنجاح", "success")
+        except Exception as e:
+            flash(f"فشل حذف الكاميرا: {e}", "danger")
+        
+        return redirect(url_for("cameras"))
 
     @app.route("/employees")
     @login_required
     def employees_page():
-        return render_template("employees.html", employees=employees.list_all_employees())
+        search = request.args.get("search", "").strip()
+        department = request.args.get("department", "").strip()
+        all_emps = employees.list_all_employees()
+        
+        # فلترة
+        filtered = all_emps
+        if search:
+            filtered = [e for e in filtered if search.lower() in e.get("name", "").lower() or search.lower() in e.get("emp_id", "").lower()]
+        if department:
+            filtered = [e for e in filtered if e.get("department", "") == department]
+        
+        # استخراج الأقسام للفلترة
+        departments = sorted(set(e.get("department", "") for e in all_emps if e.get("department")))
+        
+        return render_template("employees.html", 
+                             employees=filtered, 
+                             all_employees=all_emps,
+                             departments=departments,
+                             search=search,
+                             department=department)
 
     @app.post("/employees/add")
     @login_required(role="admin")
@@ -100,13 +262,86 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
         if not emp_id or not name:
             flash("يرجى إدخال المعرف والاسم", "danger")
             return redirect(url_for("employees_page"))
+        
+        # معالجة الصورة
+        photo_path = None
+        if "photo" in request.files:
+            photo = request.files["photo"]
+            if photo and photo.filename:
+                # التأكد من المجلد
+                upload_folder = Path("web_app/static/uploads/employees")
+                upload_folder.mkdir(parents=True, exist_ok=True)
+                
+                # حفظ الصورة
+                filename = secure_filename(f"{emp_id}_{photo.filename}")
+                photo_path_full = upload_folder / filename
+                photo.save(photo_path_full)
+                photo_path = f"uploads/employees/{filename}"
+        
         employees.add_employee(emp_id, name,
                                department=request.form.get("department", ""),
                                position=request.form.get("position", ""),
                                hire_date=request.form.get("hire_date", ""),
-                               active=(request.form.get("active", "true").lower() == "true"))
+                               active=(request.form.get("active", "true").lower() == "true"),
+                               photo=photo_path)
         employees.save()
-        flash("تم إضافة/تحديث الموظف", "success")
+        flash("تم إضافة/تحديث الموظف بنجاح", "success")
+        return redirect(url_for("employees_page"))
+    
+    @app.post("/employees/edit")
+    @login_required(role="admin")
+    def employees_edit():
+        """تعديل موظف موجود"""
+        emp_id = request.form.get("emp_id", "").strip()
+        name = request.form.get("name", "").strip()
+        if not emp_id or not name:
+            flash("يرجى إدخال المعرف والاسم", "danger")
+            return redirect(url_for("employees_page"))
+        
+        # معالجة الصورة
+        photo_path = None
+        if "photo" in request.files:
+            photo = request.files["photo"]
+            if photo and photo.filename:
+                upload_folder = Path("web_app/static/uploads/employees")
+                upload_folder.mkdir(parents=True, exist_ok=True)
+                filename = secure_filename(f"{emp_id}_{photo.filename}")
+                photo_path_full = upload_folder / filename
+                photo.save(photo_path_full)
+                photo_path = f"uploads/employees/{filename}"
+        
+        # إذا لم يتم رفع صورة جديدة، احتفظ بالصورة القديمة
+        if not photo_path:
+            emp = employees.get_employee(emp_id)
+            if emp:
+                photo_path = emp.get("photo")
+        
+        employees.add_employee(emp_id, name,
+                               department=request.form.get("department", ""),
+                               position=request.form.get("position", ""),
+                               hire_date=request.form.get("hire_date", ""),
+                               active=(request.form.get("active", "true").lower() == "true"),
+                               photo=photo_path)
+        employees.save()
+        flash(f"تم تحديث بيانات الموظف '{name}' بنجاح", "success")
+        return redirect(url_for("employees_page"))
+    
+    @app.post("/employees/delete")
+    @login_required(role="admin")
+    def employees_delete():
+        """حذف موظف"""
+        emp_id = request.form.get("emp_id", "").strip()
+        if not emp_id:
+            flash("معرف الموظف مطلوب", "danger")
+            return redirect(url_for("employees_page"))
+        
+        # حذف الموظف
+        if employees.delete_employee(emp_id):
+            employees.save()
+            flash(f"تم حذف الموظف {emp_id} بنجاح", "success")
+        else:
+            flash(f"الموظف {emp_id} غير موجود", "warning")
+        
         return redirect(url_for("employees_page"))
 
     @app.route("/attendance")
@@ -161,6 +396,21 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             flash(f"فشل حفظ الإعدادات: {e}", "danger")
         return redirect(url_for("settings_page"))
 
+    @app.route("/employees/<emp_id>")
+    @login_required
+    def employee_detail(emp_id):
+        """عرض تفاصيل موظف واحد"""
+        emp = employees.get_employee(emp_id)
+        if not emp:
+            flash("الموظف غير موجود", "danger")
+            return redirect(url_for("employees_page"))
+        
+        # جلب بيانات الحضور
+        today_att = attendance.get_daily_attendance(date.today())
+        emp_att = [r for r in today_att if r.get("employee_id") == emp_id]
+        
+        return render_template("employee_detail.html", employee=emp, attendance_today=emp_att)
+    
     @app.route("/logs")
     @login_required
     def logs_page():
@@ -172,6 +422,86 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             except Exception:
                 lines = []
         return render_template("logs.html", lines=lines)
+    
+    @app.route("/test-video")
+    @login_required
+    def test_video_page():
+        """صفحة اختبار الفيديو"""
+        return render_template("test_video.html")
+    
+    @app.post("/test-video/process")
+    @login_required
+    def test_video_process():
+        """معالجة فيديو الاختبار مع AI حقيقي"""
+        import time as time_module
+        from src.video_test_processor import VideoTestProcessor
+        
+        try:
+            if 'video' not in request.files:
+                return {"success": False, "error": "لم يتم رفع ملف فيديو"}
+            
+            video_file = request.files['video']
+            if video_file.filename == '':
+                return {"success": False, "error": "لم يتم اختيار ملف"}
+            
+            # حفظ الفيديو المؤقت
+            upload_folder = Path("web_app/static/uploads/test_videos")
+            upload_folder.mkdir(parents=True, exist_ok=True)
+            
+            filename = secure_filename(video_file.filename)
+            timestamp = int(time_module.time())
+            input_path = upload_folder / f"input_{timestamp}_{filename}"
+            output_filename = f"output_{timestamp}_{filename}"
+            output_path = upload_folder / output_filename
+            
+            video_file.save(input_path)
+            logger.info(f"تم حفظ الفيديو: {input_path}")
+            
+            # قراءة الإعدادات
+            confidence = float(request.form.get('confidence', 0.5))
+            frame_skip = int(request.form.get('frame_skip', 2))
+            max_duration = int(request.form.get('max_duration', 30))
+            enable_face = request.form.get('enable_face_recognition') == 'on'
+            enable_activity = request.form.get('enable_activity_detection') == 'on'
+            
+            logger.info(f"إعدادات المعالجة: conf={confidence}, skip={frame_skip}, duration={max_duration}")
+            logger.info(f"Face: {enable_face}, Activity: {enable_activity}")
+            
+            # إنشاء المعالج مع AI حقيقي
+            processor = VideoTestProcessor(
+                device="cpu",
+                imgsz=640,
+                conf_threshold=confidence,
+                enable_face_recognition=enable_face,
+                enable_activity_recognition=enable_activity
+            )
+            
+            # معالجة الفيديو
+            logger.info("بدء المعالجة...")
+            results = processor.process_video(
+                input_path=str(input_path),
+                output_path=str(output_path),
+                frame_skip=frame_skip,
+                max_duration=max_duration
+            )
+            
+            # حذف الملف الأصلي
+            try:
+                input_path.unlink()
+                logger.info("تم حذف الملف المؤقت")
+            except Exception as e:
+                logger.warning(f"فشل حذف الملف المؤقت: {e}")
+            
+            # إضافة رابط الفيديو للنتائج
+            results['output_video'] = url_for('static', filename=f'uploads/test_videos/{output_filename}')
+            
+            logger.info(f"اكتملت المعالجة: {results['total_persons']} أشخاص, {results['total_activities']} نشاط")
+            
+            return results
+            
+        except Exception as e:
+            logger.exception("خطأ في معالجة الفيديو")
+            return {"success": False, "error": str(e)}
 
     # SSE للأحداث الفورية
     @app.route("/events")

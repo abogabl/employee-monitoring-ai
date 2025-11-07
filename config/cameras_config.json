@@ -11,14 +11,15 @@
   "cameras": [
     {
       "id": "cam1",
-      "name": "مدخل المكتب",
+      "name": "مدخل المكتب 1",
       "source": "rtsp://192.168.1.100/stream1",
-      "device": "cuda:0",
+      "device": "cpu",
       "imgsz": 640,
       "conf": 0.5,
       "enabled": true,
       "location": "entrance",
-      "priority": 1
+      "priority": 1,
+      "fps": 25
     },
     {
       "id": "cam2",

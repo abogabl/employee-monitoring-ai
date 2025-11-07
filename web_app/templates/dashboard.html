@@ -1,49 +1,160 @@
 {% extends 'base.html' %}
 {% block content %}
-<h3>لوحة القيادة</h3>
-<div class="row g-3">
-  <div class="col-sm-4">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">الحاضرون الآن</h5>
-        <p class="display-5" id="present_count">{{ present_count }}</p>
-      </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-speedometer2 me-2"></i>لوحة القيادة</h2>
+  <div>
+    <span class="badge bg-success me-2">
+      <i class="bi bi-circle-fill me-1" style="font-size: 0.6rem;"></i>النظام نشط
+    </span>
+  </div>
+</div>
+
+<!-- إحصائيات رئيسية -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-md-6">
+    <div class="stat-card success">
+      <i class="bi bi-people-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="present_count">{{ present_count }}</h2>
+      <p class="stat-label mb-0">الحاضرون الآن</p>
+      <small class="text-muted">
+        <i class="bi bi-arrow-up text-success me-1"></i>متواجدون في المكتب
+      </small>
     </div>
   </div>
-  <div class="col-sm-4">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">الكاميرات النشطة</h5>
-        <p class="display-5" id="cameras_active">{{ cameras_active }}</p>
-      </div>
+  
+  <div class="col-lg-3 col-md-6">
+    <div class="stat-card primary">
+      <i class="bi bi-camera-video-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="cameras_active">{{ cameras_active }}</h2>
+      <p class="stat-label mb-0">الكاميرات النشطة</p>
+      <small class="text-muted">
+        <i class="bi bi-circle-fill text-success me-1" style="font-size: 0.6rem;"></i>تعمل بشكل طبيعي
+      </small>
     </div>
   </div>
-  <div class="col-sm-4">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">ساعات اليوم الإجمالية</h5>
-        <p class="display-5">{{ total_hours }}</p>
-      </div>
+  
+  <div class="col-lg-3 col-md-6">
+    <div class="stat-card warning">
+      <i class="bi bi-clock-fill stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">{{ total_hours }}</h2>
+      <p class="stat-label mb-0">ساعات اليوم الإجمالية</p>
+      <small class="text-muted">
+        <i class="bi bi-hourglass-split me-1"></i>مجموع ساعات العمل
+      </small>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-md-6">
+    <div class="stat-card info">
+      <i class="bi bi-activity stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value">98%</h2>
+      <p class="stat-label mb-0">الأداء</p>
+      <small class="text-muted">
+        <i class="bi bi-check-circle text-success me-1"></i>أداء ممتاز
+      </small>
     </div>
   </div>
 </div>
 
-<div class="mt-4">
-  <h5>حالة الكاميرات</h5>
-  <table class="table table-sm table-striped">
-    <thead><tr><th>الكاميرا</th><th>تشغيل</th><th>OK</th><th>متجمدة</th><th>رسالة</th></tr></thead>
-    <tbody>
-      {% for cid, st in cams_status.items() %}
-      <tr>
-        <td>{{ cid }}</td>
-        <td>{{ 'نعم' if st.running else 'لا' }}</td>
-        <td>{{ 'نعم' if st.health.ok else 'لا' }}</td>
-        <td>{{ 'نعم' if st.health.frozen else 'لا' }}</td>
-        <td>{{ st.health.message }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- روابط سريعة -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <a href="{{ url_for('employees_page') }}" class="card text-decoration-none">
+      <div class="card-body text-center">
+        <i class="bi bi-people-fill display-4 text-primary"></i>
+        <h5 class="mt-3 mb-0">إدارة الموظفين</h5>
+        <small class="text-muted">عرض وإضافة الموظفين</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="{{ url_for('attendance_page') }}" class="card text-decoration-none">
+      <div class="card-body text-center">
+        <i class="bi bi-calendar-check-fill display-4 text-success"></i>
+        <h5 class="mt-3 mb-0">سجل الحضور</h5>
+        <small class="text-muted">متابعة دخول وخروج</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="{{ url_for('cameras') }}" class="card text-decoration-none">
+      <div class="card-body text-center">
+        <i class="bi bi-camera-video-fill display-4 text-info"></i>
+        <h5 class="mt-3 mb-0">الكاميرات</h5>
+        <small class="text-muted">التحكم والمراقبة</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="{{ url_for('reports_page') }}" class="card text-decoration-none">
+      <div class="card-body text-center">
+        <i class="bi bi-file-earmark-bar-graph-fill display-4 text-warning"></i>
+        <h5 class="mt-3 mb-0">التقارير</h5>
+        <small class="text-muted">تقارير تفصيلية</small>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- حالة الكاميرات -->
+<div class="card">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0"><i class="bi bi-camera-video-fill me-2"></i>حالة الكاميرات</h5>
+  </div>
+  <div class="card-body">
+    {% if cams_status %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th><i class="bi bi-camera me-1"></i>الكاميرا</th>
+            <th><i class="bi bi-power me-1"></i>التشغيل</th>
+            <th><i class="bi bi-heart-pulse me-1"></i>الصحة</th>
+            <th><i class="bi bi-exclamation-triangle me-1"></i>متجمدة</th>
+            <th><i class="bi bi-chat-left-text me-1"></i>الرسالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cid, st in cams_status.items() %}
+          <tr>
+            <td><strong>{{ cid }}</strong></td>
+            <td>
+              {% if st.running %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>نشطة</span>
+              {% else %}
+              <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>متوقفة</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if st.health.ok %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>جيدة</span>
+              {% else %}
+              <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>مشكلة</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if st.health.frozen %}
+              <span class="badge bg-warning"><i class="bi bi-pause-circle me-1"></i>نعم</span>
+              {% else %}
+              <span class="badge bg-success"><i class="bi bi-play-circle me-1"></i>لا</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ st.health.message or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-4">
+      <i class="bi bi-camera-video-off display-4 text-muted"></i>
+      <p class="mt-3 text-muted">لا توجد كاميرات مُكوَّنة</p>
+      <a href="{{ url_for('cameras') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>إضافة كاميرا
+      </a>
+    </div>
+    {% endif %}
+  </div>
 </div>
 
 <script>

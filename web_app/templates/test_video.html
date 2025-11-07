@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2 class="mb-3">
+        <i class="bi bi-play-circle-fill me-2"></i>
+        اختبار الفيديو
+      </h2>
+      <p class="text-muted">قم برفع فيديو لاختبار نظام التعرف على الوجوه وكشف الأنشطة</p>
+    </div>
+  </div>
+
+  <!-- نموذج رفع الفيديو -->
+  <div class="row mb-4">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-upload me-2"></i>رفع فيديو للاختبار</h5>
+        </div>
+        <div class="card-body">
+          <form id="uploadForm" method="post" action="{{ url_for('test_video_process') }}" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label class="form-label fw-bold">اختر ملف الفيديو</label>
+              <input type="file" name="video" id="videoInput" accept="video/*" class="form-control" required>
+              <div class="form-text">
+                <i class="bi bi-info-circle me-1"></i>
+                الصيغ المدعومة: MP4, AVI, MOV, MKV (الحد الأقصى: 100MB)
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">إعدادات المعالجة</label>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">حد الثقة</label>
+                  <input type="number" name="confidence" class="form-control" value="0.5" step="0.1" min="0.1" max="1.0">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">معالجة الإطارات</label>
+                  <select name="frame_skip" class="form-select">
+                    <option value="1">كل إطار</option>
+                    <option value="2" selected>كل إطارين</option>
+                    <option value="5">كل 5 إطارات</option>
+                    <option value="10">كل 10 إطارات</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">الحد الأقصى للمدة</label>
+                  <select name="max_duration" class="form-select">
+                    <option value="30" selected>30 ثانية</option>
+                    <option value="60">60 ثانية</option>
+                    <option value="120">120 ثانية</option>
+                    <option value="-1">بدون حد</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="enable_face_recognition" id="enableFace" checked>
+                <label class="form-check-label" for="enableFace">
+                  تفعيل التعرف على الوجوه
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="enable_activity_detection" id="enableActivity" checked>
+                <label class="form-check-label" for="enableActivity">
+                  تفعيل كشف الأنشطة
+                </label>
+              </div>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                <i class="bi bi-play-fill me-2"></i>بدء المعالجة
+              </button>
+            </div>
+          </form>
+
+          <!-- شريط التقدم -->
+          <div id="progressSection" class="mt-4" style="display: none;">
+            <h6>جاري المعالجة...</h6>
+            <div class="progress" style="height: 25px;">
+              <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                   role="progressbar" style="width: 0%">0%</div>
+            </div>
+            <p class="text-muted mt-2 mb-0" id="progressText">جاري تحميل الفيديو...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- عرض النتائج -->
+  <div id="resultsSection" style="display: none;">
+    <div class="row">
+      <!-- ملخص النتائج -->
+      <div class="col-12 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-check-circle-fill me-2"></i>نتائج التحليل</h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <div class="text-center">
+                  <i class="bi bi-people-fill display-4 text-primary"></i>
+                  <h3 class="mt-2 mb-0" id="totalPersons">0</h3>
+                  <p class="text-muted mb-0">إجمالي الأشخاص</p>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="text-center">
+                  <i class="bi bi-person-check-fill display-4 text-success"></i>
+                  <h3 class="mt-2 mb-0" id="knownPersons">0</h3>
+                  <p class="text-muted mb-0">أشخاص معروفين</p>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="text-center">
+                  <i class="bi bi-activity display-4 text-warning"></i>
+                  <h3 class="mt-2 mb-0" id="totalActivities">0</h3>
+                  <p class="text-muted mb-0">الأنشطة المكتشفة</p>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="text-center">
+                  <i class="bi bi-clock-fill display-4 text-info"></i>
+                  <h3 class="mt-2 mb-0" id="processingTime">0s</h3>
+                  <p class="text-muted mb-0">وقت المعالجة</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- الفيديو المعالج -->
+      <div class="col-lg-8 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-camera-video-fill me-2"></i>الفيديو المعالج</h5>
+          </div>
+          <div class="card-body text-center">
+            <video id="resultVideo" controls class="w-100" style="max-height: 500px; background: #000;">
+              متصفحك لا يدعم عرض الفيديو
+            </video>
+            <div class="mt-3">
+              <a id="downloadLink" href="#" class="btn btn-primary" download>
+                <i class="bi bi-download me-2"></i>تحميل الفيديو المعالج
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- تفاصيل النتائج -->
+      <div class="col-lg-4 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>التفاصيل</h5>
+          </div>
+          <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+            <div id="detailsList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- جدول الإحصائيات -->
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>إحصائيات مفصلة</h5>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover" id="statsTable">
+                <thead>
+                  <tr>
+                    <th>الشخص/الكائن</th>
+                    <th>عدد الظهور</th>
+                    <th>النشاط الأكثر</th>
+                    <th>الثقة المتوسطة</th>
+                  </tr>
+                </thead>
+                <tbody id="statsTableBody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-4">
+      <button class="btn btn-outline-primary" onclick="resetTest()">
+        <i class="bi bi-arrow-clockwise me-2"></i>اختبار فيديو جديد
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// معالجة رفع النموذج
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const formData = new FormData(this);
+  const progressSection = document.getElementById('progressSection');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  const submitBtn = document.getElementById('submitBtn');
+  
+  // إظهار شريط التقدم
+  progressSection.style.display = 'block';
+  submitBtn.disabled = true;
+  
+  // إرسال الطلب
+  fetch(this.action, {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      displayResults(data);
+    } else {
+      showToast('حدث خطأ: ' + (data.error || 'خطأ غير معروف'), 'error');
+      progressSection.style.display = 'none';
+      submitBtn.disabled = false;
+    }
+  })
+  .catch(error => {
+    showToast('حدث خطأ في الاتصال: ' + error, 'error');
+    progressSection.style.display = 'none';
+    submitBtn.disabled = false;
+  });
+});
+
+// عرض النتائج
+function displayResults(data) {
+  document.getElementById('progressSection').style.display = 'none';
+  document.getElementById('resultsSection').style.display = 'block';
+  
+  // إظهار toast نجاح
+  showToast('تمت معالجة الفيديو بنجاح! 🎉', 'success');
+  
+  // تحديث الإحصائيات
+  document.getElementById('totalPersons').textContent = data.total_persons || 0;
+  document.getElementById('knownPersons').textContent = data.known_persons || 0;
+  document.getElementById('totalActivities').textContent = data.total_activities || 0;
+  document.getElementById('processingTime').textContent = (data.processing_time || 0).toFixed(2) + 's';
+  
+  // عرض الفيديو
+  if (data.output_video) {
+    const video = document.getElementById('resultVideo');
+    const downloadLink = document.getElementById('downloadLink');
+    video.src = data.output_video;
+    downloadLink.href = data.output_video;
+  }
+  
+  // عرض التفاصيل
+  displayDetails(data.details || []);
+  
+  // عرض جدول الإحصائيات
+  displayStatsTable(data.statistics || []);
+  
+  // التمرير للنتائج
+  document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// عرض التفاصيل
+function displayDetails(details) {
+  const container = document.getElementById('detailsList');
+  container.innerHTML = '';
+  
+  if (details.length === 0) {
+    container.innerHTML = '<p class="text-muted">لا توجد تفاصيل متاحة</p>';
+    return;
+  }
+  
+  details.forEach(detail => {
+    const item = document.createElement('div');
+    item.className = 'mb-3 p-3 border rounded';
+    item.innerHTML = `
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h6 class="mb-1">${detail.person || 'غير معروف'}</h6>
+          <small class="text-muted">
+            <i class="bi bi-clock me-1"></i>${detail.timestamp || '00:00:00'}
+          </small>
+        </div>
+        <span class="badge bg-${detail.activity === 'working' ? 'success' : detail.activity === 'on_phone' ? 'warning' : 'secondary'}">
+          ${detail.activity || 'غير محدد'}
+        </span>
+      </div>
+      ${detail.confidence ? `<div class="mt-2"><small class="text-muted">الثقة: ${(detail.confidence * 100).toFixed(1)}%</small></div>` : ''}
+    `;
+    container.appendChild(item);
+  });
+}
+
+// عرض جدول الإحصائيات
+function displayStatsTable(statistics) {
+  const tbody = document.getElementById('statsTableBody');
+  tbody.innerHTML = '';
+  
+  if (statistics.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد إحصائيات</td></tr>';
+    return;
+  }
+  
+  statistics.forEach(stat => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><strong>${stat.name || 'غير معروف'}</strong></td>
+      <td><span class="badge bg-primary">${stat.count || 0}</span></td>
+      <td><span class="badge bg-${stat.top_activity === 'working' ? 'success' : 'warning'}">${stat.top_activity || '-'}</span></td>
+      <td>${stat.avg_confidence ? (stat.avg_confidence * 100).toFixed(1) + '%' : '-'}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// إعادة تعيين
+function resetTest() {
+  document.getElementById('uploadForm').reset();
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('submitBtn').disabled = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Toast Notification
+function showToast(message, type = 'success') {
+  // إنشاء container إذا لم يكن موجود
+  let toastContainer = document.getElementById('toastContainer');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toastContainer';
+    toastContainer.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    `;
+    document.body.appendChild(toastContainer);
+  }
+  
+  // إنشاء toast
+  const toast = document.createElement('div');
+  toast.className = `toast-notification toast-${type}`;
+  
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  const bgColor = type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8';
+  
+  toast.style.cssText = `
+    min-width: 300px;
+    max-width: 500px;
+    padding: 16px 20px;
+    background: ${bgColor};
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: slideIn 0.3s ease-out;
+    font-weight: 500;
+  `;
+  
+  toast.innerHTML = `
+    <span style="font-size: 20px; font-weight: bold;">${icon}</span>
+    <span style="flex: 1;">${message}</span>
+    <button onclick="this.parentElement.remove()" style="
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    ">×</button>
+  `;
+  
+  toastContainer.appendChild(toast);
+  
+  // حذف تلقائي بعد 5 ثواني
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+</script>
+
+<style>
+.card {
+  border-radius: 12px;
+  border: none;
+}
+
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+}
+
+#videoInput {
+  cursor: pointer;
+}
+
+#resultVideo {
+  border-radius: 8px;
+}
+
+/* Toast Animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}
+
+.toast-notification:hover {
+  transform: translateX(-5px);
+  transition: transform 0.2s ease;
+}
+</style>
+{% endblock %}
