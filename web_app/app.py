@@ -434,7 +434,7 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     def test_video_process():
         """معالجة فيديو الاختبار مع AI حقيقي"""
         import time as time_module
-        from src.video_test_processor import VideoTestProcessor
+        from src.simple_video_processor import SimpleVideoProcessor
         
         try:
             if 'video' not in request.files:
@@ -457,27 +457,27 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             video_file.save(input_path)
             logger.info(f"تم حفظ الفيديو: {input_path}")
             
-            # قراءة الإعدادات
-            confidence = float(request.form.get('confidence', 0.5))
-            frame_skip = int(request.form.get('frame_skip', 2))
-            max_duration = int(request.form.get('max_duration', 30))
-            enable_face = request.form.get('enable_face_recognition') == 'on'
-            enable_activity = request.form.get('enable_activity_detection') == 'on'
+            # قراءة الإعدادات - التوازن الذهبي (دقة عالية + سرعة معقولة)
+            confidence = float(request.form.get('confidence', 0.25))
+            frame_skip = int(request.form.get('frame_skip', 1))  # 1 = كل ثاني إطار (توازن)
+            max_duration = int(request.form.get('max_duration', -1))  # -1 = بدون حد
+            imgsz = int(request.form.get('imgsz', 480))  # 480 = توازن ذهبي
+            # تفعيل التعرف على الأنشطة (معطّل التعرف على الوجوه للسرعة)
+            enable_face = False
+            enable_activity = True
             
-            logger.info(f"إعدادات المعالجة: conf={confidence}, skip={frame_skip}, duration={max_duration}")
-            logger.info(f"Face: {enable_face}, Activity: {enable_activity}")
-            
-            # إنشاء المعالج مع AI حقيقي
-            processor = VideoTestProcessor(
+            # تهيئة المعالج المبسط
+            processor = SimpleVideoProcessor(
                 device="cpu",
-                imgsz=640,
+                imgsz=imgsz,
                 conf_threshold=confidence,
                 enable_face_recognition=enable_face,
-                enable_activity_recognition=enable_activity
+                enable_activity_recognition=enable_activity,
+                detection_only=False  # عطّلنا وضع الكشف فقط لتمكين الأنشطة
             )
             
             # معالجة الفيديو
-            logger.info("بدء المعالجة...")
+            logger.info("بدء المعالجة بالمعالج المبسط...")
             results = processor.process_video(
                 input_path=str(input_path),
                 output_path=str(output_path),
@@ -492,8 +492,17 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             except Exception as e:
                 logger.warning(f"فشل حذف الملف المؤقت: {e}")
             
-            # إضافة رابط الفيديو للنتائج
-            results['output_video'] = url_for('static', filename=f'uploads/test_videos/{output_filename}')
+            # التحقق من الملف الناتج الفعلي (.mp4 أو .avi)
+            actual_output = None
+            if output_path.exists():
+                actual_output = output_filename
+            elif output_path.with_suffix('.avi').exists():
+                actual_output = output_filename.replace('.mp4', '.avi')
+            
+            if actual_output:
+                results['output_video'] = url_for('static', filename=f'uploads/test_videos/{actual_output}')
+            else:
+                logger.warning("الملف الناتج غير موجود!")
             
             logger.info(f"اكتملت المعالجة: {results['total_persons']} أشخاص, {results['total_activities']} نشاط")
             

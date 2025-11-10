@@ -16,40 +16,50 @@ if not logger.handlers:
 
 
 # الأنشطة القياسية
-DEFAULT_ACTIVITIES = ["working", "on_phone", "idle", "meeting", "away"]
+DEFAULT_ACTIVITIES = ["working", "on_phone", "sleeping", "idle", "meeting", "away"]
 
 
 DEFAULT_RULES: Dict[str, Dict[str, Any]] = {
-    "on_phone": {
-        "conditions": [
-            {"hand_near_face": True, "weight": 0.7},
-            {"phone_nearby": True, "weight": 0.9},
-            {"motion_level": "<0.2", "weight": 0.5},
-        ],
-        "min_score": 0.8,
-    },
     "working": {
         "conditions": [
-            {"sitting": True, "weight": 0.6},
-            {"computer_nearby": True, "weight": 0.8},
-            {"hands_forward": True, "weight": 0.7},
-            {"motion_level": "0.05-0.5", "weight": 0.5},
+            {"sitting": True, "weight": 0.4},
+            {"computer_nearby": True, "weight": 1.0},  # أهم شرط
+            {"hands_forward": True, "weight": 0.5},
+            {"motion_level": "0.01-0.6", "weight": 0.3},
         ],
-        "min_score": 0.7,
+        "min_score": 0.4,  # خفضنا الحد أكثر
+    },
+    "on_phone": {
+        "conditions": [
+            {"hand_near_face": True, "weight": 0.8},
+            {"phone_nearby": True, "weight": 0.7},
+            {"sitting": True, "weight": 0.3},
+            {"motion_level": "<0.3", "weight": 0.3},
+        ],
+        "min_score": 0.6,  # خفضنا الحد
+    },
+    "sleeping": {
+        "conditions": [
+            {"sitting": True, "weight": 0.5},
+            {"hand_near_face": True, "weight": 0.7},  # رأس على اليد
+            {"motion_level": "<0.02", "weight": 0.9},  # حركة شبه معدومة
+        ],
+        "min_score": 0.7,  # نرفع الحد قليلاً لتقليل False Positives
     },
     "idle": {
         "conditions": [
-            {"sitting": True, "weight": 0.4},
-            {"motion_level": "<0.05", "weight": 0.6},
+            {"sitting": True, "weight": 0.5},
+            {"motion_level": "<0.08", "weight": 0.6},
         ],
-        "min_score": 0.5,
+        "min_score": 0.4,  # خفضنا الحد
     },
     "meeting": {
         "conditions": [
             {"sitting": True, "weight": 0.4},
-            {"motion_level": "0.05-0.3", "weight": 0.3},
+            {"motion_level": "0.05-0.4", "weight": 0.4},
+            {"hands_forward": True, "weight": 0.3},
         ],
-        "min_score": 0.6,
+        "min_score": 0.5,
     },
     "away": {
         "conditions": [

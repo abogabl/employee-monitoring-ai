@@ -31,7 +31,23 @@ Thumbs.db
 models/
 videos/
 
+# YOLO Models (كبيرة جداً!)
+*.pt
+yolov8*.pt
+
+# Test videos and uploads
+web_app/static/uploads/test_videos/*.mp4
+web_app/static/uploads/test_videos/*.avi
+web_app/static/uploads/test_videos/*.mov
+web_app/static/uploads/test_videos/input_*
+web_app/static/uploads/test_videos/output_*
+
+# Database backups
+attendance_db/backups/*.db
+attendance_db/backups/.last_*
+
 # Keep folder structure with .gitkeep
 !models/.gitkeep
 !videos/.gitkeep
 !logs/.gitkeep
+!web_app/static/uploads/test_videos/.gitkeep

@@ -66,8 +66,8 @@ class ActivityRecognizer:
         self.use_motion = use_motion
         self.rules = rules or ActivityRules()
 
-        # نافذة تنعيم بعدد إطارات تقديري
-        self.window_size = max(1, int(smoothing_seconds * max(fps_hint, 1.0)))
+        # نافذة تنعيم بعدد إطارات تقديري (زدنا الزمن لتنعيم أفضل)
+        self.window_size = max(1, int(smoothing_seconds * 2.0 * max(fps_hint, 1.0)))
         self.histories: Dict[int, Deque[ActivityResult]] = {}
         self.prev_boxes: Dict[int, Tuple[int, int, int, int]] = {}
         self.prev_times: Dict[int, float] = {}
@@ -131,13 +131,15 @@ class ActivityRecognizer:
         shoulder_mid = ((ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2)
         trunk_len = _euclidean(shoulder_mid, hip_mid) + 1e-6
         knee_hip = abs(knee_mid[1] - hip_mid[1])
-        sitting = knee_hip < 0.6 * trunk_len
+        # زدنا الحد لتحسين كشف الجلوس
+        sitting = knee_hip < 0.75 * trunk_len
 
         # اليد قرب الوجه: أي من الرسغين ضمن مسافة من الأنف/الأذن
         face_center = ((nose[0] + le[0] + re[0]) / 3, (nose[1] + le[1] + re[1]) / 3)
         wrist_face_dist = min(_euclidean(lw, face_center), _euclidean(rw, face_center))
         face_size = max(_euclidean(le, re), _euclidean(nose, ((le[0]+re[0])/2, (le[1]+re[1])/2))) + 1e-6
-        hand_near_face = wrist_face_dist < 1.6 * face_size
+        # زدنا مسافة الحد لتحسين كشف اليد قرب الوجه
+        hand_near_face = wrist_face_dist < 2.5 * face_size
 
         # اليدان أمام الجسم: الرسغان أمام منتصف الكتفين أفقياً (نحو الأمام) وصناعياً داخل نطاق الظهر-الصدر
         body_center_x = (ls[0] + rs[0]) / 2

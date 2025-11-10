@@ -89,38 +89,44 @@ class PersonDetector:
         # نصف الدقة فقط مع CUDA
         self.use_half = bool(half and self.device == "cuda")
 
-        # تحميل النموذج
-        try:
-            # تأمين بيئة التحميل مع السماح للفئات المطلوبة أثناء torch.load
+        # تحميل النموذج المطلوب فقط (بدون fallback للنماذج الكبيرة)
+        load_attempts = [self.model_path]
+
+        last_error = None
+        for path in load_attempts:
             try:
-                from torch.serialization import safe_globals as _safe_globals  # noqa: F401
-                allowed = [
-                    DetectionModel,
-                    Sequential, ModuleList,
-                    Conv2d, BatchNorm2d, Linear,
-                    ReLU, SiLU, LeakyReLU,
-                    Upsample, MaxPool2d, ConvTranspose2d,
-                    Conv, C2f, SPPF, Bottleneck, Detect,
-                ]
-                with safe_globals(allowed):
-                    self.model = YOLO(self.model_path)
-            except Exception:
-                # في حال غياب context manager، نعتمد على add_safe_globals فقط
-                self.model = YOLO(self.model_path)
-            if self.device == "cuda":
-                self.model.to("cuda")
-            if self.use_half and torch is not None:
                 try:
-                    # بعض نماذج ultralytics تدعم half تلقائياً من خلال بارامتر predict
-                    # لكن نُبقي علماً داخلياً للاستخدام
-                    pass
-                except Exception as e:
-                    logger.warning("تعذّر تفعيل نصف الدقة: %s", e)
-                    self.use_half = False
-            logger.info("تم تحميل نموذج YOLO: %s على الجهاز %s", self.model_path, self.device)
-        except Exception as e:
-            logger.exception("فشل تحميل نموذج YOLO: %s", e)
-            raise
+                    from torch.serialization import safe_globals as _safe_globals  # noqa: F401
+                    allowed = [
+                        DetectionModel,
+                        Sequential, ModuleList,
+                        Conv2d, BatchNorm2d, Linear,
+                        ReLU, SiLU, LeakyReLU,
+                        Upsample, MaxPool2d, ConvTranspose2d,
+                        Conv, C2f, SPPF, Bottleneck, Detect,
+                    ]
+                    with safe_globals(allowed):
+                        self.model = YOLO(path)
+                except Exception:
+                    self.model = YOLO(path)
+                if self.device == "cuda":
+                    self.model.to("cuda")
+                if self.use_half and torch is not None:
+                    try:
+                        pass
+                    except Exception as e:
+                        logger.warning("تعذّر تفعيل نصف الدقة: %s", e)
+                        self.use_half = False
+                self.model_path = path
+                logger.info("تم تحميل نموذج YOLO: %s على الجهاز %s", path, self.device)
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                logger.warning("تعذر تحميل %s، سيتم المحاولة بنموذج آخر...", path)
+        if last_error is not None and not hasattr(self, "model"):
+            logger.exception("فشل تحميل جميع نماذج YOLO")
+            raise last_error
 
     def detect(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """تنفيذ الكشف على إطار واحد وإرجاع قائمة كائنات أشخاص.
@@ -136,6 +142,9 @@ class PersonDetector:
                 conf=self.conf,
                 device=self.device,
                 classes=[0],  # person فقط
+                iou=0.3,  # NMS أقوى لتقليل التكرار
+                agnostic_nms=True,
+                max_det=50,  # تقليل للحد من الكشوفات الخاطئة
                 half=self.use_half,
                 verbose=False,
                 stream=False,
