@@ -1,40 +1,125 @@
 {% extends 'base_public.html' %}
 {% block content %}
-<div class="row justify-content-center align-items-center min-vh-100">
-  <div class="col-md-5 col-lg-4">
-    <div class="card shadow-lg border-0 rounded-lg">
-      <div class="card-header bg-primary text-white text-center py-4">
-        <i class="bi bi-shield-lock fs-1"></i>
-        <h3 class="fw-bold mt-2 mb-0">نظام مراقبة الموظفين</h3>
-        <p class="mb-0 mt-1 opacity-75">Employee Monitoring System</p>
+<div class="login-container">
+  <div class="login-card">
+    <!-- Logo and Header Section -->
+    <div class="login-header">
+      <div class="logo-container">
+        <div class="logo-circle">
+          <i class="bi bi-eye-fill"></i>
+        </div>
+        <div class="logo-pulse"></div>
       </div>
-      <div class="card-body p-4">
-        <h5 class="card-title text-center mb-4">تسجيل الدخول</h5>
-        <form method="post">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">
-              <i class="bi bi-person-fill me-1"></i>اسم المستخدم
-            </label>
-            <input name="username" class="form-control form-control-lg" placeholder="أدخل اسم المستخدم" required autofocus />
+      <h1 class="system-title">المراقب الذكي</h1>
+      <p class="system-subtitle">Smart Monitoring System</p>
+      <div class="header-divider"></div>
+    </div>
+
+    <!-- Login Form -->
+    <div class="login-body">
+      <h2 class="welcome-text">مرحباً بك</h2>
+      <p class="login-subtitle">قم بتسجيل الدخول للمتابعة</p>
+      
+      <form method="post" class="login-form">
+        <div class="form-group">
+          <label class="form-label">
+            <i class="bi bi-person-circle"></i>
+            اسم المستخدم
+          </label>
+          <div class="input-wrapper">
+            <input 
+              name="username" 
+              type="text" 
+              class="form-input" 
+              placeholder="أدخل اسم المستخدم" 
+              required 
+              autofocus 
+            />
+            <div class="input-icon">
+              <i class="bi bi-person"></i>
+            </div>
           </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">
-              <i class="bi bi-key-fill me-1"></i>كلمة المرور
-            </label>
-            <input name="password" type="password" class="form-control form-control-lg" placeholder="أدخل كلمة المرور" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <i class="bi bi-shield-lock"></i>
+            كلمة المرور
+          </label>
+          <div class="input-wrapper">
+            <input 
+              name="password" 
+              type="password" 
+              class="form-input" 
+              placeholder="أدخل كلمة المرور" 
+              required 
+            />
+            <div class="input-icon">
+              <i class="bi bi-lock"></i>
+            </div>
           </div>
-          <button class="btn btn-primary btn-lg w-100 fw-bold">
-            <i class="bi bi-box-arrow-in-left me-2"></i>دخول
-          </button>
-        </form>
+        </div>
+
+        <button type="submit" class="login-button">
+          <span class="button-text">تسجيل الدخول</span>
+          <i class="bi bi-arrow-left button-icon"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <div class="login-footer">
+      <div class="info-badge">
+        <i class="bi bi-info-circle-fill"></i>
+        <span>حسابات تجريبية متاحة</span>
       </div>
-      <div class="card-footer text-center py-3 bg-light">
-        <small class="text-muted">
-          <i class="bi bi-info-circle me-1"></i>
-          المستخدمون الافتراضيون: admin, manager, operator, viewer
-        </small>
+      <div class="demo-users">
+        <span class="demo-tag" onclick="fillLogin('admin', 'admin')">admin</span>
+        <span class="demo-tag" onclick="fillLogin('manager', 'manager')">manager</span>
+        <span class="demo-tag" onclick="fillLogin('operator', 'operator')">operator</span>
       </div>
     </div>
   </div>
+
+  <!-- Background Decorations -->
+  <div class="bg-decoration decoration-1"></div>
+  <div class="bg-decoration decoration-2"></div>
+  <div class="bg-decoration decoration-3"></div>
 </div>
+
+<script>
+function fillLogin(username, password) {
+  console.log('Filling login with:', username);
+  
+  // الحصول على الحقول
+  var usernameInput = document.querySelector('input[name="username"]');
+  var passwordInput = document.querySelector('input[name="password"]');
+  var form = document.querySelector('.login-form');
+  
+  if (!usernameInput || !passwordInput || !form) {
+    console.error('Could not find form elements');
+    return;
+  }
+  
+  // ملء حقول تسجيل الدخول
+  usernameInput.value = username;
+  passwordInput.value = password;
+  
+  // إضافة تأثير بصري
+  usernameInput.style.borderColor = '#667eea';
+  passwordInput.style.borderColor = '#667eea';
+  
+  console.log('Values set, submitting...');
+  
+  // تسجيل الدخول تلقائياً
+  setTimeout(function() {
+    form.submit();
+  }, 500);
+}
+
+// التأكد من تحميل DOM
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Page loaded, ready for login');
+});
+</script>
 {% endblock %}

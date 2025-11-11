@@ -1,9 +1,491 @@
-/* خلفية متدرجة للصفحات العامة */
+/* ===================================
+   المراقب الذكي - Smart Monitoring System
+   تصميم حديث وعصري
+   =================================== */
+
+/* خلفية متدرجة عصرية */
 body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* خلفية الصفحات الداخلية */
+body:not(.login-page) {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e3e8f0 100%);
+  overflow-x: hidden;
+}
+
+/* صفحة تسجيل الدخول - إخفاء scroll */
+body.login-page {
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ===================================
+   صفحة تسجيل الدخول - Login Page
+   =================================== */
+
+.login-container {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+/* بطاقة تسجيل الدخول */
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 30px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 100px rgba(102, 126, 234, 0.2);
+  max-width: 450px;
+  width: 90%;
+  max-height: 95vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  z-index: 10;
+  animation: slideUp 0.6s ease-out;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  margin: 1rem;
+}
+
+/* إخفاء scrollbar في البطاقة */
+.login-card::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+.login-card {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* رأس البطاقة */
+.login-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem 2rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* شعار النظام */
+.logo-container {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 1rem;
+}
+
+.logo-circle {
+  width: 85px;
+  height: 85px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.2),
+    inset 0 -5px 20px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 2;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.logo-circle i {
+  font-size: 3rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logo-pulse {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* عنوان النظام */
+.system-title {
+  color: #ffffff;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  letter-spacing: 1px;
+  position: relative;
+  z-index: 2;
+}
+
+.system-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  margin: 0.5rem 0 0;
+  font-weight: 400;
+  letter-spacing: 2px;
+  position: relative;
+  z-index: 2;
+}
+
+.header-divider {
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #ffffff, transparent);
+  margin: 1.5rem auto 0;
+  border-radius: 2px;
+  position: relative;
+  z-index: 2;
+}
+
+/* جسم البطاقة */
+.login-body {
+  padding: 1.5rem 2rem 1.5rem;
+}
+
+.welcome-text {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 0.4rem;
+  text-align: center;
+}
+
+.login-subtitle {
+  color: #718096;
+  text-align: center;
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* نموذج تسجيل الدخول */
+.login-form {
+  margin-top: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1.2rem;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.form-label i {
+  font-size: 1.1rem;
+  color: #667eea;
+}
+
+/* حقول الإدخال */
+.input-wrapper {
+  position: relative;
+  direction: rtl;
+}
+
+.form-input {
+  width: 100%;
+  padding: 1rem 1rem 1rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 15px;
+  font-size: 1.05rem;
+  transition: all 0.3s ease;
+  background: #f7fafc;
+  color: #2d3748;
+  direction: rtl;
+  text-align: right;
+}
+
+.form-input::placeholder {
+  color: #a0aec0;
+  font-size: 0.95rem;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #ffffff;
+  box-shadow: 
+    0 0 0 4px rgba(102, 126, 234, 0.1),
+    0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.input-icon {
+  position: absolute;
+  left: 1.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a0aec0;
+  font-size: 1.3rem;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus + .input-icon {
+  color: #667eea;
+  transform: translateY(-50%) scale(1.1);
+}
+
+/* زر تسجيل الدخول */
+.login-button {
+  width: 100%;
+  padding: 0.9rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 15px;
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.login-button:hover::before {
+  left: 100%;
+}
+
+.login-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+}
+
+.login-button:active {
+  transform: translateY(-1px);
+}
+
+.button-text {
+  position: relative;
+  z-index: 1;
+}
+
+.button-icon {
+  font-size: 1.3rem;
+  transition: transform 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.login-button:hover .button-icon {
+  transform: translateX(-5px);
+}
+
+/* تذييل البطاقة */
+.login-footer {
+  background: linear-gradient(to bottom, transparent, #f7fafc);
+  padding: 1.2rem 2rem 1.5rem;
+  text-align: center;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #edf2f7, #e2e8f0);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  color: #4a5568;
+  margin-bottom: 1rem;
+  border: 1px solid #cbd5e0;
+}
+
+.info-badge i {
+  color: #667eea;
+  font-size: 1.1rem;
+}
+
+.demo-users {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.demo-tag {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #ffffff;
+  padding: 0.4rem 1rem;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.demo-tag:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.5);
+  background: linear-gradient(135deg, #7c8ef5, #8b5bb8);
+}
+
+.demo-tag:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* زخارف الخلفية */
+.bg-decoration {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.1;
+  animation: float 6s ease-in-out infinite;
+}
+
+.decoration-1 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, #ffffff 0%, transparent 70%);
+  top: 10%;
+  right: 5%;
+  animation-delay: 0s;
+}
+
+.decoration-2 {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, #ffffff 0%, transparent 70%);
+  bottom: 15%;
+  left: 10%;
+  animation-delay: 2s;
+}
+
+.decoration-3 {
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, #ffffff 0%, transparent 70%);
+  top: 50%;
+  left: 5%;
+  animation-delay: 4s;
+}
+
+/* استجابة الشاشات الصغيرة */
+@media (max-width: 576px) {
+  .login-card {
+    margin: 0.5rem;
+    border-radius: 25px;
+    max-height: 98vh;
+  }
+  
+  .login-header {
+    padding: 1.5rem 1.5rem 1.5rem;
+  }
+  
+  .logo-circle {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .logo-circle i {
+    font-size: 2rem;
+  }
+  
+  .system-title {
+    font-size: 1.8rem;
+  }
+  
+  .system-subtitle {
+    font-size: 0.85rem;
+  }
+  
+  .login-body {
+    padding: 1.2rem 1.5rem;
+  }
+  
+  .welcome-text {
+    font-size: 1.4rem;
+  }
+  
+  .form-group {
+    margin-bottom: 1rem;
+  }
 }
 
 /* Modern Navbar */
@@ -408,4 +890,337 @@ pre {
 /* صفحة تسجيل الدخول */
 .card.shadow-lg {
   box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important;
+}
+
+/* ===================================
+   Toast Notifications - إشعارات حديثة
+   =================================== */
+
+.toast-container {
+  z-index: 9999 !important;
+}
+
+.toast {
+  border-radius: 15px !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25) !important;
+  backdrop-filter: blur(10px);
+  min-width: 300px;
+  animation: slideInRight 0.4s ease-out;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast.hide {
+  animation: slideOutRight 0.4s ease-out;
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}
+
+.toast-body {
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.toast-body i {
+  font-size: 1.3rem;
+  margin-left: 0.75rem;
+}
+
+/* ألوان Toast محسّنة */
+.toast.bg-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.toast.bg-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.toast.bg-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.toast.bg-info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+/* زر إغلاق Toast */
+.toast .btn-close {
+  padding: 0.5rem;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.toast .btn-close:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* ===================================
+   تحسينات البطاقات والعناصر
+   =================================== */
+
+/* البطاقات */
+.card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.1) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15) !important;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 15px 15px 0 0 !important;
+  padding: 1rem 1.5rem;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* بطاقات الإحصائيات */
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.stat-card.success::before {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.stat-card.primary::before {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.stat-card.warning::before {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.stat-card.info::before {
+  background: linear-gradient(90deg, #06b6d4, #0891b2);
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0.5rem 0;
+}
+
+.stat-label {
+  font-size: 1rem;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.stat-icon {
+  font-size: 3rem;
+  opacity: 0.1;
+  color: #667eea;
+}
+
+/* الجداول */
+.table {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table thead {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1)) !important;
+}
+
+.table thead th {
+  border: none !important;
+  font-weight: 600;
+  color: #4a5568;
+  padding: 1rem;
+}
+
+.table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.table tbody tr:hover {
+  background: rgba(102, 126, 234, 0.05) !important;
+  transform: scale(1.01);
+}
+
+.table tbody td {
+  padding: 1rem;
+  vertical-align: middle;
+  border-color: rgba(102, 126, 234, 0.1) !important;
+}
+
+/* القائمة المنسدلة للمستخدم */
+.dropdown-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(102, 126, 234, 0.2) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
+  padding: 0.5rem;
+  min-width: 200px;
+  margin-top: 0.5rem !important;
+}
+
+.dropdown-item {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  color: #4a5568;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dropdown-item i {
+  font-size: 1.2rem;
+  color: #667eea;
+  transition: all 0.3s ease;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15)) !important;
+  color: #667eea !important;
+  transform: translateX(-3px);
+}
+
+.dropdown-item:hover i {
+  transform: scale(1.2);
+  color: #764ba2;
+}
+
+/* أزرار محسّنة */
+.btn {
+  border-radius: 12px !important;
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.btn-warning:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+}
+
+/* Badges محسّنة */
+.badge {
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.bg-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.bg-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.bg-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.bg-info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+/* الحاوية الرئيسية */
+main.container {
+  background: transparent;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
 }

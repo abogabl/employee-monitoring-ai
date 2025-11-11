@@ -17,7 +17,7 @@ from typing import Dict, Generator, List
 import os
 from werkzeug.utils import secure_filename
 
-from flask import Flask, Response, flash, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 from src.attendance_system import AttendanceSystem
 from src.employee_manager import EmployeeDatabase
@@ -435,14 +435,19 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
         """معالجة فيديو الاختبار مع AI حقيقي"""
         import time as time_module
         from src.simple_video_processor import SimpleVideoProcessor
+        from src.file_validator import FileValidator
         
         try:
+            logger.info("=== بدء معالجة فيديو جديد ===")
+            
             if 'video' not in request.files:
-                return {"success": False, "error": "لم يتم رفع ملف فيديو"}
+                logger.error("لم يتم العثور على ملف فيديو في الطلب")
+                return jsonify({"success": False, "error": "لم يتم رفع ملف فيديو"})
             
             video_file = request.files['video']
             if video_file.filename == '':
-                return {"success": False, "error": "لم يتم اختيار ملف"}
+                logger.error("اسم الملف فارغ")
+                return jsonify({"success": False, "error": "لم يتم اختيار ملف"})
             
             # حفظ الفيديو المؤقت
             upload_folder = Path("web_app/static/uploads/test_videos")
@@ -457,6 +462,22 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             video_file.save(input_path)
             logger.info(f"تم حفظ الفيديو: {input_path}")
             
+            # التحقق من صحة الفيديو
+            logger.info("التحقق من صحة الفيديو...")
+            validator = FileValidator(max_size_mb=500, max_duration_sec=600)
+            is_valid, error_msg, video_info = validator.validate_video_file(input_path)
+            
+            if not is_valid:
+                logger.error(f"الفيديو غير صحيح: {error_msg}")
+                # حذف الملف غير الصحيح
+                try:
+                    input_path.unlink()
+                except:
+                    pass
+                return jsonify({"success": False, "error": f"الملف غير صحيح: {error_msg}"})
+            
+            logger.info(f"✓ الفيديو صحيح: {video_info['duration_sec']:.1f}s, {video_info['resolution']}")
+            
             # قراءة الإعدادات - التوازن الذهبي (دقة عالية + سرعة معقولة)
             confidence = float(request.form.get('confidence', 0.25))
             frame_skip = int(request.form.get('frame_skip', 1))  # 1 = كل ثاني إطار (توازن)
@@ -467,6 +488,7 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             enable_activity = True
             
             # تهيئة المعالج المبسط
+            logger.info("تهيئة SimpleVideoProcessor...")
             processor = SimpleVideoProcessor(
                 device="cpu",
                 imgsz=imgsz,
@@ -475,15 +497,24 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                 enable_activity_recognition=enable_activity,
                 detection_only=False  # عطّلنا وضع الكشف فقط لتمكين الأنشطة
             )
+            logger.info("تم تهيئة المعالج بنجاح")
             
-            # معالجة الفيديو
-            logger.info("بدء المعالجة بالمعالج المبسط...")
+            # معالجة الفيديو مع progress tracking
+            video_task_id = f"video_{timestamp}"
+            logger.info(f"بدء معالجة الفيديو: {input_path} [Task ID: {video_task_id}]")
+            logger.info(f"الإعدادات: imgsz={imgsz}, frame_skip={frame_skip}, confidence={confidence}")
             results = processor.process_video(
                 input_path=str(input_path),
                 output_path=str(output_path),
                 frame_skip=frame_skip,
-                max_duration=max_duration
+                max_duration=max_duration,
+                task_id=video_task_id,
+                enable_progress_tracking=True
             )
+            logger.info("انتهت المعالجة")
+            
+            # إضافة task_id للنتائج (للعميل)
+            results['task_id'] = video_task_id
             
             # حذف الملف الأصلي
             try:
@@ -504,14 +535,31 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             else:
                 logger.warning("الملف الناتج غير موجود!")
             
-            logger.info(f"اكتملت المعالجة: {results['total_persons']} أشخاص, {results['total_activities']} نشاط")
+            logger.info(f"اكتملت المعالجة: {results.get('total_persons', 0)} أشخاص, {results.get('total_activities', 0)} نشاط")
             
-            return results
+            # إضافة success flag
+            results['success'] = True
+            return jsonify(results)
             
         except Exception as e:
             logger.exception("خطأ في معالجة الفيديو")
-            return {"success": False, "error": str(e)}
+            return jsonify({"success": False, "error": str(e)}), 500
 
+    # API للحصول على تقدم المعالجة
+    @app.route("/api/progress/<task_id>")
+    @login_required
+    def get_progress(task_id: str):
+        """الحصول على تقدم معالجة المهمة"""
+        try:
+            from src.progress_tracker import get_tracker
+            tracker = get_tracker(task_id)
+            if tracker:
+                return jsonify(tracker.get_progress_dict())
+            else:
+                return jsonify({"error": "المهمة غير موجودة"}), 404
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
     # SSE للأحداث الفورية
     @app.route("/events")
     @login_required
