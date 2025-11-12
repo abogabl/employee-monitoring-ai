@@ -1,0 +1,37 @@
+{
+  "processor_settings": {
+    "device": "cpu",
+    "imgsz": 416,
+    "conf_threshold": 0.35,
+    "yolo_model": "s",
+    "activity_window": 15,
+    "frame_skip": 3
+  },
+  "ai_features": {
+    "enable_advanced_ai": true,
+    "enable_face_recognition": true,
+    "enable_activity_recognition": true,
+    "enable_anomaly_detection": true,
+    "enable_behavior_prediction": true,
+    "enable_risk_assessment": true
+  },
+  "performance": {
+    "max_duration": 300,
+    "enable_progress_tracking": true,
+    "log_level": "INFO",
+    "save_snapshots": true,
+    "snapshot_quality": 95
+  },
+  "ai_thresholds": {
+    "anomaly_threshold": 0.7,
+    "risk_threshold": 0.6,
+    "prediction_confidence": 0.5,
+    "face_similarity": 0.6
+  },
+  "output_settings": {
+    "include_ai_insights": true,
+    "include_frame_analyses": true,
+    "include_recommendations": true,
+    "max_frame_analyses": 10
+  }
+}

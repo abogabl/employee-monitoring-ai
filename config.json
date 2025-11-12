@@ -4,10 +4,18 @@
     { "name": "test_video", "source": "videos/sample.mp4" }
   ],
   "yolo": {
-    "model": "yolov8n.pt",
-    "imgsz": 640,
-    "confidence": 0.5,
+    "model": "yolov8s.pt",
+    "imgsz": 416,
+    "confidence": 0.35,
     "device": "cpu"
+  },
+  "level2_processor": {
+    "enable_advanced_ai": true,
+    "enable_face_recognition": true,
+    "enable_activity_recognition": true,
+    "activity_window": 15,
+    "frame_skip": 3,
+    "max_duration": 300
   },
   "tracking": {
     "type": "bytetrack",

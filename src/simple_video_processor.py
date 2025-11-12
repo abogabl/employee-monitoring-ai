@@ -61,13 +61,15 @@ class SimpleVideoProcessor:
         logger.info("تهيئة المعالج المبسط...")
         
         try:
+            # استخدام التحسينات الجديدة من المستوى 1
             self.person_detector = PersonDetector(
-                model_size="n",
+                model_size="m",  # ترقية من nano إلى medium للدقة الأفضل
                 device=device,
-                imgsz=int(imgsz),  # استخدام القيمة الممررة مباشرة
-                conf=max(float(conf_threshold), 0.25)
+                imgsz=int(imgsz),
+                conf=0.35,  # العتبة المحسنة
+                iou=0.5     # IOU المحسن
             )
-            logger.info("✓ تم تهيئة كاشف الأشخاص")
+            logger.info("✓ تم تهيئة كاشف الأشخاص مع تحسينات المستوى 1 (yolov8m, conf=0.35, iou=0.5)")
         except Exception as e:
             logger.error(f"فشل تهيئة كاشف الأشخاص: {e}")
             self.person_detector = None
@@ -98,28 +100,48 @@ class SimpleVideoProcessor:
         else:
             self.face_recognizer = None
         
-        # كشف الأنشطة - النظام المحسّن أولاً
+        # كشف الأنشطة - استخدام ActivityRecognizer المحسن من المستوى 1
         if enable_activity_recognition:
             try:
-                if self.use_enhanced and ADVANCED_AVAILABLE:
-                    self.activity_detector = AdvancedActivityDetector(
-                        max_distance=250,
-                        motion_window=10,
-                        use_pose=True,
-                        use_optical_flow=True,
-                        temporal_window=30
-                    )
-                    logger.info("✓ تم تهيئة كاشف الأنشطة المحسّن (85%+ دقة)")
-                else:
-                    self.activity_detector = SimpleActivityDetector(
-                        max_distance=300,
-                        motion_window=5,
-                        smoothing_method='none'
-                    )
-                    logger.info("✓ تم تهيئة كاشف الأنشطة الأساسي")
+                from .activity_recognition import ActivityRecognizer
+                from .activity_rules import ActivityRules
+                
+                # استخدام ActivityRecognizer مع التحسينات الجديدة
+                activity_rules = ActivityRules(config_path="config/activity_config.json")
+                self.activity_detector = ActivityRecognizer(
+                    use_pose=True,
+                    use_objects=True,
+                    use_motion=True,
+                    smoothing_seconds=5.0,
+                    fps_hint=25.0,
+                    rules=activity_rules,
+                    window_size=15,  # التنعيم الزمني المحسن
+                    use_ema=False,   # استخدام majority vote افتراضياً
+                    ema_alpha=0.2
+                )
+                logger.info("✓ تم تهيئة ActivityRecognizer مع تحسينات المستوى 1 (window=15, temporal smoothing)")
             except Exception as e:
-                logger.warning(f"فشل كاشف الأنشطة: {e}")
-                self.activity_detector = None
+                logger.warning(f"فشل تهيئة ActivityRecognizer، استخدام البديل: {e}")
+                try:
+                    if self.use_enhanced and ADVANCED_AVAILABLE:
+                        self.activity_detector = AdvancedActivityDetector(
+                            max_distance=250,
+                            motion_window=10,
+                            use_pose=True,
+                            use_optical_flow=True,
+                            temporal_window=30
+                        )
+                        logger.info("✓ تم تهيئة كاشف الأنشطة المحسّن (85%+ دقة)")
+                    else:
+                        self.activity_detector = SimpleActivityDetector(
+                            max_distance=300,
+                            motion_window=5,
+                            smoothing_method='none'
+                        )
+                        logger.info("✓ تم تهيئة كاشف الأنشطة الأساسي")
+                except Exception as e2:
+                    logger.error(f"فشل جميع كاشفات الأنشطة: {e2}")
+                    self.activity_detector = None
         else:
             self.activity_detector = None
         

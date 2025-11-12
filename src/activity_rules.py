@@ -90,8 +90,61 @@ class ActivityRules:
     }
     """
 
-    def __init__(self, rules: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
+    def __init__(self, rules: Optional[Dict[str, Dict[str, Any]]] = None, config_path: Optional[str] = None) -> None:
         self.rules = rules or DEFAULT_RULES.copy()
+        self.config = self._load_activity_config(config_path)
+        self._update_rules_from_config()
+
+    def _load_activity_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+        """تحميل إعدادات النشاط من ملف JSON."""
+        if config_path is None:
+            config_path = "config/activity_config.json"
+        
+        config_file = Path(config_path)
+        if not config_file.exists():
+            logger.info("ملف إعدادات النشاط غير موجود: %s، سيتم استخدام الإعدادات الافتراضية", config_path)
+            return {}
+        
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            logger.info("تم تحميل إعدادات النشاط من: %s", config_path)
+            return config
+        except Exception as e:
+            logger.warning("فشل تحميل إعدادات النشاط: %s", e)
+            return {}
+
+    def _update_rules_from_config(self) -> None:
+        """تحديث القواعد باستخدام الإعدادات المحملة."""
+        if not self.config:
+            return
+        
+        # تحديث عتبات الكشف للهاتف
+        phone_config = self.config.get("phone_detection", {})
+        if "on_phone" in self.rules and phone_config:
+            phone_rule = self.rules["on_phone"]
+            if "distance_ratio" in phone_config:
+                # تحديث وزن phone_nearby بناءً على distance_ratio
+                for cond in phone_rule.get("conditions", []):
+                    if "phone_nearby" in cond:
+                        cond["weight"] = phone_config["distance_ratio"] * 1.5
+        
+        # تحديث عتبات النوم
+        sleep_config = self.config.get("sleep_detection", {})
+        if "sleeping" in self.rules and sleep_config:
+            sleep_rule = self.rules["sleeping"]
+            if "head_angle_threshold" in sleep_config:
+                sleep_rule["min_score"] = max(0.6, sleep_config["head_angle_threshold"] / 40.0)
+        
+        # تحديث عتبات العمل
+        work_config = self.config.get("working_detection", {})
+        if "working" in self.rules and work_config:
+            work_rule = self.rules["working"]
+            if "motion_level_min" in work_config:
+                for cond in work_rule.get("conditions", []):
+                    if "motion_level" in cond:
+                        min_motion = work_config["motion_level_min"]
+                        cond["motion_level"] = f"{min_motion}-0.8"
 
     @staticmethod
     def _eval_numeric_condition(value: float, cond: str) -> bool:

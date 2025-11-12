@@ -69,14 +69,16 @@ class PersonDetector:
 
     def __init__(
         self,
-        model_size: str = "n",
+        model_size: str = "m",
         device: str = "cpu",
-        conf: float = 0.5,
+        conf: float = 0.35,
+        iou: float = 0.5,
         imgsz: int = 640,
         half: bool = True,
     ) -> None:
         self.model_path = f"yolov8{model_size}.pt"
         self.conf = float(conf)
+        self.iou = float(iou)
         self.imgsz = int(imgsz)
 
         # تحديد الجهاز
@@ -142,7 +144,7 @@ class PersonDetector:
                 conf=self.conf,
                 device=self.device,
                 classes=[0],  # person فقط
-                iou=0.3,  # NMS أقوى لتقليل التكرار
+                iou=self.iou,  # NMS قابل للتهيئة
                 agnostic_nms=True,
                 max_det=50,  # تقليل للحد من الكشوفات الخاطئة
                 half=self.use_half,

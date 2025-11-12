@@ -37,8 +37,8 @@ except Exception as e:
 # Test 3: Integration
 print("\n[3] Testing Integration...")
 try:
-    from src.simple_video_processor import SimpleVideoProcessor
-    processor = SimpleVideoProcessor(use_enhanced=True)
+    from src.level2_video_processor import Level2VideoProcessor
+    processor = Level2VideoProcessor(enable_advanced_ai=True)
     print("    [OK] Integration successful!")
     print("    - System will use enhanced detectors automatically")
 except Exception as e:

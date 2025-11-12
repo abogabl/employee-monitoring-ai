@@ -92,19 +92,38 @@ class FaceRecognitionSystem:
             name_file = emp_dir / "name.txt"
             name = name_file.read_text(encoding="utf-8").strip() if name_file.exists() else emp_id
 
+            # جمع كل الوجوه الصالحة أولاً
+            valid_faces = []
             for img_path in images:
                 img = cv2.imdecode(np.fromfile(str(img_path), dtype=np.uint8), cv2.IMREAD_COLOR)
                 if img is None:
                     logger.warning("تعذر قراءة الصورة: %s", img_path)
                     continue
                 faces = self.detect_faces(img)
-                if not faces:
-                    continue
-                # اختر أفضل وجه (أعلى score) إن وُجد
-                best = max(faces, key=lambda f: float(f.get("det_score", 0.0)))
-                emb = best["embedding"]
+                for face in faces:
+                    # فلترة جودة الوجه
+                    det_score = float(face.get("det_score", 0.0))
+                    if det_score < 0.7:  # حد أدنى لجودة الكشف
+                        continue
+                    
+                    # فحص المسافة بين العينين إن توفرت landmarks
+                    landmarks = face.get("landmarks", [])
+                    if landmarks and len(landmarks) >= 2:
+                        eye_dist = np.linalg.norm(np.array(landmarks[0]) - np.array(landmarks[1]))
+                        if eye_dist < 70:  # حد أدنى للمسافة بين العينين
+                            continue
+                    
+                    valid_faces.append((face, det_score, str(img_path)))
+            
+            # ترتيب حسب الجودة والاحتفاظ بأفضل 10
+            valid_faces.sort(key=lambda x: x[1], reverse=True)
+            top_faces = valid_faces[:10]  # أفضل 10 وجوه
+            
+            for face, score, path in top_faces:
+                emb = face["embedding"]
                 self._add_embedding(emp_id, name, emb)
                 total_images += 1
+                logger.debug("تم قبول وجه من %s بدرجة %.3f", path, score)
             if emp_id in self.encodings:
                 built += 1
 

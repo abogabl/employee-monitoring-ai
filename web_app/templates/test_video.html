@@ -215,6 +215,93 @@
         </div>
       </div>
 
+      <!-- AI Insights Section - Level 2 -->
+      <div class="row mt-4" id="aiInsightsSection" style="display: none;">
+        <div class="col-12">
+          <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0">
+                <i class="bi bi-brain me-2"></i>
+                رؤى الذكاء الاصطناعي المتقدم - المستوى الثاني
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <!-- AI Statistics -->
+                <div class="col-md-3">
+                  <div class="text-center p-3 bg-light rounded">
+                    <i class="bi bi-exclamation-triangle-fill display-6 text-warning"></i>
+                    <h4 class="mt-2 mb-0" id="anomaliesDetected">0</h4>
+                    <p class="text-muted mb-0">حالات شذوذ مكتشفة</p>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="text-center p-3 bg-light rounded">
+                    <i class="bi bi-shield-exclamation display-6 text-danger"></i>
+                    <h4 class="mt-2 mb-0" id="highRiskPersons">0</h4>
+                    <p class="text-muted mb-0">أشخاص عالي المخاطر</p>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="text-center p-3 bg-light rounded">
+                    <i class="bi bi-crystal-ball display-6 text-info"></i>
+                    <h4 class="mt-2 mb-0" id="predictionsMade">0</h4>
+                    <p class="text-muted mb-0">تنبؤات ذكية</p>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="text-center p-3 bg-light rounded">
+                    <i class="bi bi-diagram-3-fill display-6 text-success"></i>
+                    <h4 class="mt-2 mb-0" id="behaviorPatterns">0</h4>
+                    <p class="text-muted mb-0">أنماط سلوكية</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- System Recommendations -->
+              <div class="row mt-4">
+                <div class="col-12">
+                  <h6><i class="bi bi-lightbulb-fill me-2 text-warning"></i>توصيات النظام الذكية</h6>
+                  <div id="systemRecommendations" class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                      <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                      جاري تحليل البيانات...
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detailed Analysis -->
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <h6><i class="bi bi-person-exclamation me-2 text-danger"></i>تحليل المخاطر</h6>
+                  <div id="riskAnalysis">
+                    <div class="progress mb-2">
+                      <div class="progress-bar bg-success" id="lowRiskBar" style="width: 0%"></div>
+                      <div class="progress-bar bg-warning" id="mediumRiskBar" style="width: 0%"></div>
+                      <div class="progress-bar bg-danger" id="highRiskBar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted">
+                      <span class="badge bg-success">منخفض</span>
+                      <span class="badge bg-warning">متوسط</span>
+                      <span class="badge bg-danger">عالي</span>
+                    </small>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <h6><i class="bi bi-graph-up-arrow me-2 text-primary"></i>حالة الذكاء الاصطناعي</h6>
+                  <div id="aiStatus">
+                    <div class="d-flex align-items-center">
+                      <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                      <span>جاري التحليل...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       <!-- جدول الإحصائيات -->
       <div class="col-12">
         <div class="card shadow-sm">
@@ -355,10 +442,15 @@ function displayResults(data) {
   // إظهار toast نجاح
   showToast('تمت معالجة الفيديو بنجاح! 🎉', 'success');
   
-  // تحديث الإحصائيات
-  document.getElementById('totalPersons').textContent = data.total_persons || 0;
-  document.getElementById('knownPersons').textContent = data.known_persons || 0;
-  document.getElementById('totalActivities').textContent = data.total_activities || 0;
+  // تحديث الإحصائيات من البيانات الفعلية
+  const statistics = data.statistics || [];
+  const totalPersons = statistics.length;
+  const knownPersons = statistics.filter(s => s.name && s.name !== 'Unknown').length;
+  const totalActivities = statistics.reduce((sum, s) => sum + (s.count || 0), 0);
+  
+  document.getElementById('totalPersons').textContent = totalPersons;
+  document.getElementById('knownPersons').textContent = knownPersons;
+  document.getElementById('totalActivities').textContent = totalActivities;
   document.getElementById('processingTime').textContent = (data.processing_time || 0).toFixed(2) + 's';
   
   // عرض الفيديو
@@ -378,6 +470,9 @@ function displayResults(data) {
   
   // رسم الرسوم البيانية
   drawCharts(data.statistics || []);
+  
+  // عرض رؤى الذكاء الاصطناعي المتقدم
+  displayAIInsights(data);
 
   // عرض صورة التشخيص إن توفرت
   if (data.debug_image) {
@@ -701,6 +796,124 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 300);
   }, 5000);
 }
+
+// عرض رؤى الذكاء الاصطناعي المتقدم - المستوى الثاني
+function displayAIInsights(data) {
+  const aiInsightsSection = document.getElementById('aiInsightsSection');
+  
+  // التحقق من وجود بيانات الذكاء الاصطناعي
+  if (data.ai_insights) {
+    aiInsightsSection.style.display = 'block';
+    
+    const insights = data.ai_insights;
+    
+    // تحديث الإحصائيات
+    document.getElementById('anomaliesDetected').textContent = insights.anomalies_detected || 0;
+    document.getElementById('highRiskPersons').textContent = insights.high_risk_persons || 0;
+    document.getElementById('predictionsMade').textContent = insights.predictions_made || 0;
+    document.getElementById('behaviorPatterns').textContent = insights.behavior_patterns_found || 0;
+    
+    // عرض التوصيات
+    displaySystemRecommendations(data.system_recommendations || []);
+    
+    // عرض تحليل المخاطر
+    displayRiskAnalysis(data.statistics || []);
+    
+    // عرض حالة الذكاء الاصطناعي
+    displayAIStatus(insights);
+    
+    console.log('🧠 AI Insights:', insights);
+  } else {
+    aiInsightsSection.style.display = 'none';
+  }
+}
+
+// عرض توصيات النظام
+function displaySystemRecommendations(recommendations) {
+  const container = document.getElementById('systemRecommendations');
+  
+  if (!recommendations || recommendations.length === 0) {
+    container.innerHTML = '<div class="alert alert-success">النظام يعمل بشكل طبيعي - لا توجد توصيات خاصة</div>';
+    return;
+  }
+  
+  let html = '';
+  recommendations.forEach((rec, index) => {
+    const alertType = rec.includes('مخاطر عالي') || rec.includes('شذوذ') ? 'danger' : 
+                     rec.includes('منخفض') || rec.includes('مراجعة') ? 'warning' : 'info';
+    
+    html += `
+      <div class="alert alert-${alertType} mb-2">
+        <i class="bi bi-lightbulb-fill me-2"></i>
+        ${rec}
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+// عرض تحليل المخاطر
+function displayRiskAnalysis(statistics) {
+  if (!statistics || statistics.length === 0) return;
+  
+  // حساب توزيع المخاطر
+  let lowRisk = 0, mediumRisk = 0, highRisk = 0;
+  
+  statistics.forEach(stat => {
+    const riskLevel = stat.risk_level || 'low';
+    if (riskLevel === 'low') lowRisk++;
+    else if (riskLevel === 'medium') mediumRisk++;
+    else if (riskLevel === 'high') highRisk++;
+  });
+  
+  const total = statistics.length;
+  if (total === 0) return;
+  
+  // تحديث أشرطة التقدم
+  const lowPercent = (lowRisk / total) * 100;
+  const mediumPercent = (mediumRisk / total) * 100;
+  const highPercent = (highRisk / total) * 100;
+  
+  document.getElementById('lowRiskBar').style.width = lowPercent + '%';
+  document.getElementById('mediumRiskBar').style.width = mediumPercent + '%';
+  document.getElementById('highRiskBar').style.width = highPercent + '%';
+}
+
+// عرض حالة الذكاء الاصطناعي
+function displayAIStatus(insights) {
+  const container = document.getElementById('aiStatus');
+  
+  const aiEnabled = insights.ai_enabled;
+  const totalAnalyses = (insights.anomalies_detected || 0) + (insights.predictions_made || 0);
+  
+  let statusHtml = '';
+  
+  if (aiEnabled) {
+    statusHtml = `
+      <div class="d-flex align-items-center text-success">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <div>
+          <strong>نشط ويعمل</strong>
+          <div class="small text-muted">${totalAnalyses} تحليل تم إجراؤه</div>
+        </div>
+      </div>
+    `;
+  } else {
+    statusHtml = `
+      <div class="d-flex align-items-center text-warning">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div>
+          <strong>غير متوفر</strong>
+          <div class="small text-muted">يتطلب مكتبات إضافية</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  container.innerHTML = statusHtml;
+}
+
 </script>
 
 <style>

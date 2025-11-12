@@ -45,8 +45,8 @@ def test_activity_detection():
         )
         print("✓ تم إنشاء Detector بنجاح")
         
-        # إنشاء YOLO للكشف
-        yolo = YOLO('yolov8n.pt')
+        # إنشاء YOLO للكشف (نموذج محسّن)
+        yolo = YOLO('yolov8m.pt')
         print("✓ تم تحميل YOLO")
         
         # فتح كاميرا أو فيديو للاختبار

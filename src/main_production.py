@@ -40,6 +40,7 @@ from tqdm import tqdm
 from .detection_tracking import PersonDetector, PersonTracker
 from .face_recognition_system import FaceRecognitionSystem
 from .activity_recognition import ActivityRecognizer
+from .level2_video_processor import Level2VideoProcessor
 from .reid import ReIDSystem
 from .attendance_system import AttendanceSystem
 from .attendance_manager import AttendanceManager
@@ -57,8 +58,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--source", default="videos/sample.mp4", help="فيديو/كاميرا: مسار ملف أو 0 للكاميرا أو rtsp://")
     p.add_argument("--camera-id", default="cam1", help="معرف الكاميرا")
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="جهاز تنفيذ YOLO")
+    p.add_argument("--yolo-size", default="m", choices=["n", "s", "m", "l", "x"], help="حجم نموذج YOLO")
     p.add_argument("--imgsz", type=int, default=640, help="حجم الإدخال لليولو")
-    p.add_argument("--conf", type=float, default=0.5, help="عتبة الثقة لليولو")
+    p.add_argument("--conf", type=float, default=0.35, help="عتبة الثقة لليولو")
+    p.add_argument("--iou", type=float, default=0.5, help="عتبة IOU لـ NMS")
     p.add_argument("--enable-face-recognition", action="store_true")
     p.add_argument("--enable-activity-recognition", action="store_true")
     p.add_argument("--enable-attendance", action="store_true")
@@ -68,6 +71,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--display", action="store_true", help="عرض الفيديو")
     p.add_argument("--fps-limit", type=float, default=0.0, help="حد أقصى FPS، 0 لتعطيله")
     p.add_argument("--threads", type=int, default=0, help="عدد خيوط المعالجة الإضافية (0 = تسلسلي)")
+    p.add_argument("--activity-window", type=int, default=15, help="نافذة التنعيم الزمني للأنشطة (إطارات)")
+    p.add_argument("--use-ema", action="store_true", help="استخدام EMA بدلاً من majority vote للتنعيم")
+    p.add_argument("--ema-alpha", type=float, default=0.2, help="معامل alpha لـ EMA")
     return p.parse_args()
 
 
@@ -115,7 +121,7 @@ def main() -> None:
     perf = PerformanceMonitor()
     errors = ErrorHandler()
 
-    detector = PersonDetector(model_size="n", device=args.device, conf=args.conf, imgsz=args.imgsz, half=(args.device == "cuda"))
+    detector = PersonDetector(model_size=args.yolo_size, device=args.device, conf=args.conf, iou=args.iou, imgsz=args.imgsz, half=(args.device == "cuda"))
     # تتبع أكثر ثباتاً: تحمّل اختفاء أطول ومسافة مطابقة أصغر
     tracker = PersonTracker(max_disappeared=60, max_distance=25)
 
@@ -150,7 +156,7 @@ def main() -> None:
     recognizer = None
     if args.enable_activity_recognition:
         try:
-            recognizer = ActivityRecognizer(use_pose=True, use_objects=True, use_motion=True, smoothing_seconds=5.0, fps_hint=25)
+            recognizer = ActivityRecognizer(use_pose=True, use_objects=True, use_motion=True, smoothing_seconds=5.0, fps_hint=25, window_size=args.activity_window, use_ema=args.use_ema, ema_alpha=args.ema_alpha)
         except Exception as e:
             errors.log_error(e, context="ActivityRecognizer init")
             recognizer = None

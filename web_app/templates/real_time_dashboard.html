@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 لوحة التحكم المباشرة - نظام المراقبة الذكي</title>
+    
+    <!-- Bootstrap RTL -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .dashboard-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 1rem 0;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .stat-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+        
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .camera-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        .camera-header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .camera-stream {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: #000;
+        }
+        
+        .camera-status {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+        
+        .status-online {
+            color: #28a745;
+        }
+        
+        .status-offline {
+            color: #dc3545;
+        }
+        
+        .persons-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .person-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .activity-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 15px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        
+        .activity-working {
+            background: #28a745;
+            color: white;
+        }
+        
+        .activity-sleeping {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .activity-idle {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-item {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 10px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .text-white {
+            color: white !important;
+        }
+        
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="text-white mb-0">
+                        <i class="bi bi-camera-video-fill me-2"></i>
+                        لوحة التحكم المباشرة
+                    </h1>
+                    <p class="text-white-50 mb-0">نظام المراقبة الذكي - المستوى الثاني</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <span class="badge bg-success me-2" id="connectionStatus">
+                        <i class="bi bi-wifi"></i> متصل
+                    </span>
+                    <span class="text-white-50" id="currentTime"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid mt-3">
+        <!-- System Statistics -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card text-center">
+                    <div class="stat-value" id="totalCameras">0</div>
+                    <div class="stat-label">
+                        <i class="bi bi-camera-fill me-1"></i>
+                        إجمالي الكاميرات
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card text-center">
+                    <div class="stat-value" id="activeCameras">0</div>
+                    <div class="stat-label">
+                        <i class="bi bi-record-circle-fill me-1"></i>
+                        كاميرات نشطة
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card text-center">
+                    <div class="stat-value" id="totalPersons">0</div>
+                    <div class="stat-label">
+                        <i class="bi bi-people-fill me-1"></i>
+                        إجمالي الأشخاص
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card text-center">
+                    <div class="stat-value" id="knownPersons">0</div>
+                    <div class="stat-label">
+                        <i class="bi bi-person-check-fill me-1"></i>
+                        أشخاص معروفين
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Control Panel -->
+            <div class="col-md-4">
+                <div class="control-panel">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-gear-fill me-2"></i>
+                        لوحة التحكم
+                    </h5>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success btn-glass" id="startCamerasBtn">
+                            <i class="bi bi-play-fill me-1"></i>
+                            بدء جميع الكاميرات
+                        </button>
+                        <button class="btn btn-danger btn-glass" id="stopCamerasBtn">
+                            <i class="bi bi-stop-fill me-1"></i>
+                            إيقاف جميع الكاميرات
+                        </button>
+                        <button class="btn btn-info btn-glass" id="generateReportBtn">
+                            <i class="bi bi-file-earmark-text-fill me-1"></i>
+                            إنشاء تقرير
+                        </button>
+                    </div>
+                    
+                    <hr class="text-white-50">
+                    
+                    <h6 class="text-white mb-2">حالة النظام</h6>
+                    <div class="text-white-50 small">
+                        <div>وقت التشغيل: <span id="systemUptime">0</span> ثانية</div>
+                        <div>آخر تحديث: <span id="lastUpdate">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Active Persons -->
+                <div class="control-panel">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-people-fill me-2"></i>
+                        الأشخاص النشطين
+                    </h5>
+                    <div class="persons-list" id="activePersonsList">
+                        <div class="text-center text-white-50">
+                            <div class="loading-spinner"></div>
+                            <div class="mt-2">جاري التحميل...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cameras Grid -->
+            <div class="col-md-8">
+                <div class="chart-container">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-camera-video-fill me-2"></i>
+                        الكاميرات المباشرة
+                    </h5>
+                    <div class="camera-grid" id="camerasGrid">
+                        <div class="text-center text-white-50">
+                            <div class="loading-spinner"></div>
+                            <div class="mt-2">جاري تحميل الكاميرات...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Charts -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-bar-chart-fill me-2"></i>
+                        توزيع الأنشطة
+                    </h5>
+                    <canvas id="activitiesChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-graph-up me-2"></i>
+                        أداء الكاميرات
+                    </h5>
+                    <canvas id="performanceChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="row">
+            <div class="col-12">
+                <div class="control-panel">
+                    <h5 class="text-white mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        الإنذارات الحديثة
+                    </h5>
+                    <div id="alertsList">
+                        <div class="text-center text-white-50">لا توجد إنذارات</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // متغيرات عامة
+        let socket;
+        let activitiesChart;
+        let performanceChart;
+        let systemData = {};
+
+        // تهيئة الصفحة
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeCharts();
+            loadInitialData();
+            updateCurrentTime();
+            
+            // تحديث الوقت كل ثانية
+            setInterval(updateCurrentTime, 1000);
+            
+            // ربط أحداث الأزرار
+            document.getElementById('startCamerasBtn').addEventListener('click', startCameras);
+            document.getElementById('stopCamerasBtn').addEventListener('click', stopCameras);
+            document.getElementById('generateReportBtn').addEventListener('click', generateReport);
+        });
+
+        // تهيئة Socket.IO
+        function initializeSocket() {
+            socket = io('/dashboard');
+            
+            socket.on('connect', function() {
+                console.log('متصل بالخادم');
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('انقطع الاتصال');
+                updateConnectionStatus(false);
+            });
+            
+            socket.on('system_update', function(data) {
+                updateSystemStats(data.data);
+            });
+            
+            socket.on('cameras_update', function(data) {
+                updateCamerasGrid(data.data);
+            });
+            
+            socket.on('persons_update', function(data) {
+                updateActivePersons(data.data);
+            });
+            
+            socket.on('camera_status', function(data) {
+                showAlert(data.message, data.success ? 'success' : 'danger');
+            });
+        }
+
+        // تهيئة الرسوم البيانية
+        function initializeCharts() {
+            // رسم الأنشطة
+            const activitiesCtx = document.getElementById('activitiesChart').getContext('2d');
+            activitiesChart = new Chart(activitiesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['العمل', 'النوم', 'خامل'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#28a745', '#dc3545', '#6c757d'],
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // رسم الأداء
+            const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+            performanceChart = new Chart(performanceCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'الإطارات المعالجة',
+                        data: [],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            ticks: {
+                                color: 'white'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: 'white'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // تحميل البيانات الأولية
+        function loadInitialData() {
+            fetch('/dashboard/api/system/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        systemData = data.data;
+                        updateSystemStats(data.data.system);
+                        updateCamerasGrid(data.data.cameras);
+                    }
+                })
+                .catch(error => console.error('خطأ في تحميل البيانات:', error));
+            
+            loadCamerasList();
+            loadActivePersons();
+            loadRecentAlerts();
+        }
+
+        // تحديث إحصائيات النظام
+        function updateSystemStats(stats) {
+            document.getElementById('totalCameras').textContent = stats.total_cameras || 0;
+            document.getElementById('activeCameras').textContent = stats.active_cameras || 0;
+            document.getElementById('totalPersons').textContent = stats.total_persons || 0;
+            document.getElementById('knownPersons').textContent = stats.known_persons || 0;
+            document.getElementById('systemUptime').textContent = stats.uptime || 0;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('ar');
+        }
+
+        // تحديث شبكة الكاميرات
+        function updateCamerasGrid(cameras) {
+            const grid = document.getElementById('camerasGrid');
+            
+            if (!cameras || Object.keys(cameras).length === 0) {
+                grid.innerHTML = '<div class="text-center text-white-50">لا توجد كاميرات متاحة</div>';
+                return;
+            }
+            
+            let html = '';
+            for (const [cameraId, camera] of Object.entries(cameras)) {
+                const statusClass = camera.is_active ? 'status-online' : 'status-offline';
+                const statusText = camera.is_active ? 'متصل' : 'غير متصل';
+                
+                html += `
+                    <div class="camera-card">
+                        <div class="camera-header">
+                            <div class="text-white">
+                                <strong>${camera.name}</strong>
+                                <div class="small">${camera.location}</div>
+                            </div>
+                            <span class="badge ${statusClass}">${statusText}</span>
+                        </div>
+                        <img src="/dashboard/api/camera/${cameraId}/stream" 
+                             class="camera-stream" 
+                             alt="${camera.name}"
+                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMzMzIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPtmE2Kcg2YrZiNis2K8g2YXYtdiv2LEg2YHZitiv2YrZiDwvdGV4dD48L3N2Zz4='">
+                        <div class="camera-status">
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-white-50">الإطارات: ${camera.frames_processed || 0}</small>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-white-50">الأشخاص: ${camera.persons_detected || 0}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            grid.innerHTML = html;
+        }
+
+        // تحديث الأشخاص النشطين
+        function updateActivePersons(persons) {
+            const list = document.getElementById('activePersonsList');
+            
+            if (!persons || persons.length === 0) {
+                list.innerHTML = '<div class="text-center text-white-50">لا يوجد أشخاص نشطين</div>';
+                return;
+            }
+            
+            let html = '';
+            persons.forEach(person => {
+                const activities = person.activities || {};
+                const mainActivity = Object.keys(activities).reduce((a, b) => 
+                    activities[a] > activities[b] ? a : b, 'idle');
+                
+                html += `
+                    <div class="person-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="text-white font-weight-bold">${person.name}</div>
+                                <div class="small text-white-50">معرف: ${person.global_id}</div>
+                                <div class="small text-white-50">الكاميرات: ${person.active_cameras.join(', ')}</div>
+                            </div>
+                            <span class="activity-badge activity-${mainActivity}">${getActivityLabel(mainActivity)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            list.innerHTML = html;
+        }
+
+        // تحميل قائمة الكاميرات
+        function loadCamerasList() {
+            fetch('/dashboard/api/cameras/list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateCamerasGrid(data.cameras.reduce((acc, cam) => {
+                            acc[cam.id] = cam;
+                            return acc;
+                        }, {}));
+                    }
+                })
+                .catch(error => console.error('خطأ في تحميل الكاميرات:', error));
+        }
+
+        // تحميل الأشخاص النشطين
+        function loadActivePersons() {
+            fetch('/dashboard/api/persons/active')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateActivePersons(data.active_persons);
+                    }
+                })
+                .catch(error => console.error('خطأ في تحميل الأشخاص:', error));
+        }
+
+        // تحميل الإنذارات الحديثة
+        function loadRecentAlerts() {
+            fetch('/dashboard/api/alerts/recent')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateAlertsList(data.alerts);
+                    }
+                })
+                .catch(error => console.error('خطأ في تحميل الإنذارات:', error));
+        }
+
+        // تحديث قائمة الإنذارات
+        function updateAlertsList(alerts) {
+            const list = document.getElementById('alertsList');
+            
+            if (!alerts || alerts.length === 0) {
+                list.innerHTML = '<div class="text-center text-white-50">لا توجد إنذارات</div>';
+                return;
+            }
+            
+            let html = '';
+            alerts.forEach(alert => {
+                html += `
+                    <div class="alert-item">
+                        <div class="d-flex justify-content-between">
+                            <div class="text-white">${alert.message}</div>
+                            <small class="text-white-50">${new Date(alert.timestamp).toLocaleTimeString('ar')}</small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            list.innerHTML = html;
+        }
+
+        // بدء الكاميرات
+        function startCameras() {
+            socket.emit('start_cameras');
+            showAlert('جاري بدء الكاميرات...', 'info');
+        }
+
+        // إيقاف الكاميرات
+        function stopCameras() {
+            socket.emit('stop_cameras');
+            showAlert('جاري إيقاف الكاميرات...', 'warning');
+        }
+
+        // إنشاء تقرير
+        function generateReport() {
+            fetch('/dashboard/api/reports/generate', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('تم إنشاء التقرير بنجاح', 'success');
+                    } else {
+                        showAlert('فشل في إنشاء التقرير', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('خطأ في إنشاء التقرير:', error);
+                    showAlert('خطأ في إنشاء التقرير', 'danger');
+                });
+        }
+
+        // تحديث حالة الاتصال
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'badge bg-success me-2';
+                status.innerHTML = '<i class="bi bi-wifi"></i> متصل';
+            } else {
+                status.className = 'badge bg-danger me-2';
+                status.innerHTML = '<i class="bi bi-wifi-off"></i> غير متصل';
+            }
+        }
+
+        // تحديث الوقت الحالي
+        function updateCurrentTime() {
+            document.getElementById('currentTime').textContent = 
+                new Date().toLocaleString('ar');
+        }
+
+        // عرض تنبيه
+        function showAlert(message, type) {
+            // يمكن تطوير نظام تنبيهات أكثر تقدماً هنا
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+
+        // الحصول على تسمية النشاط
+        function getActivityLabel(activity) {
+            const labels = {
+                'working': 'يعمل',
+                'sleeping': 'نائم',
+                'idle': 'خامل',
+                'on_phone': 'هاتف'
+            };
+            return labels[activity] || activity;
+        }
+    </script>
+</body>
+</html>

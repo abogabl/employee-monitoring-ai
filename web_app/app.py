@@ -15,9 +15,8 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Generator, List
 import os
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, stream_template, send_from_directory
 from werkzeug.utils import secure_filename
-
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 from src.attendance_system import AttendanceSystem
 from src.employee_manager import EmployeeDatabase
@@ -429,12 +428,21 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
         """صفحة اختبار الفيديو"""
         return render_template("test_video.html")
     
+    @app.route("/favicon.ico")
+    def favicon():
+        """أيقونة الموقع"""
+        return send_from_directory(
+            os.path.join(app.root_path, 'static'),
+            'favicon.png',
+            mimetype='image/png'
+        )
+    
     @app.post("/test-video/process")
     @login_required
     def test_video_process():
         """معالجة فيديو الاختبار مع AI حقيقي"""
         import time as time_module
-        from src.simple_video_processor import SimpleVideoProcessor
+        from src.level2_video_processor import Level2VideoProcessor
         from src.file_validator import FileValidator
         
         try:
@@ -478,39 +486,54 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             
             logger.info(f"✓ الفيديو صحيح: {video_info['duration_sec']:.1f}s, {video_info['resolution']}")
             
-            # قراءة الإعدادات - التوازن الذهبي (دقة عالية + سرعة معقولة)
-            confidence = float(request.form.get('confidence', 0.25))
-            frame_skip = int(request.form.get('frame_skip', 1))  # 1 = كل ثاني إطار (توازن)
-            max_duration = int(request.form.get('max_duration', -1))  # -1 = بدون حد
-            imgsz = int(request.form.get('imgsz', 480))  # 480 = توازن ذهبي
-            # تفعيل التعرف على الأنشطة (معطّل التعرف على الوجوه للسرعة)
-            enable_face = False
+            # قراءة الإعدادات - محسنة للسرعة
+            confidence = float(request.form.get('confidence', 0.35))
+            frame_skip = int(request.form.get('frame_skip', 3))  # 3 = كل ثالث إطار للسرعة
+            max_duration = int(request.form.get('max_duration', 30))  # حد أقصى 30 ثانية للاختبار
+            imgsz = int(request.form.get('imgsz', 320))  # 320 = أسرع
+            # تفعيل التعرف على الوجوه والأنشطة للدقة الكاملة
+            enable_face = True
             enable_activity = True
             
-            # تهيئة المعالج المبسط
-            logger.info("تهيئة SimpleVideoProcessor...")
-            processor = SimpleVideoProcessor(
+            # تهيئة معالج المستوى الثاني مع الذكاء الاصطناعي المتقدم
+            logger.info("تهيئة Level2VideoProcessor مع الذكاء الاصطناعي المتقدم...")
+            processor = Level2VideoProcessor(
                 device="cpu",
-                imgsz=imgsz,
-                conf_threshold=confidence,
+                imgsz=416,  # حجم متوازن
+                conf_threshold=0.35,  # العتبة المحسنة
                 enable_face_recognition=enable_face,
                 enable_activity_recognition=enable_activity,
-                detection_only=False  # عطّلنا وضع الكشف فقط لتمكين الأنشطة
+                enable_advanced_ai=True,  # تفعيل الذكاء الاصطناعي المتقدم
+                yolo_model="s",  # small للتوازن بين السرعة والدقة
+                activity_window=15  # نافذة تنعيم محسنة
             )
-            logger.info("تم تهيئة المعالج بنجاح")
+            logger.info("تم تهيئة معالج المستوى الثاني بنجاح")
             
             # معالجة الفيديو مع progress tracking
             video_task_id = f"video_{timestamp}"
             logger.info(f"بدء معالجة الفيديو: {input_path} [Task ID: {video_task_id}]")
             logger.info(f"الإعدادات: imgsz={imgsz}, frame_skip={frame_skip}, confidence={confidence}")
-            results = processor.process_video(
-                input_path=str(input_path),
-                output_path=str(output_path),
-                frame_skip=frame_skip,
-                max_duration=max_duration,
-                task_id=video_task_id,
-                enable_progress_tracking=True
-            )
+            try:
+                results = processor.process_video(
+                    input_path=str(input_path),
+                    output_path=str(output_path),
+                    frame_skip=frame_skip,
+                    max_duration=max_duration,
+                    task_id=video_task_id,
+                    enable_progress_tracking=True
+                )
+            except ValueError as e:
+                logger.error(f"خطأ في صيغة الفيديو: {e}")
+                return jsonify({
+                    "success": False, 
+                    "error": f"مشكلة في الفيديو: {str(e)}. تأكد من أن الفيديو صالح وغير تالف."
+                })
+            except Exception as e:
+                logger.error(f"خطأ في معالجة الفيديو: {e}")
+                return jsonify({
+                    "success": False, 
+                    "error": f"خطأ في المعالجة: {str(e)}"
+                })
             logger.info("انتهت المعالجة")
             
             # إضافة task_id للنتائج (للعميل)

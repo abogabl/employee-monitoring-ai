@@ -60,15 +60,21 @@ class ActivityRecognizer:
         smoothing_seconds: float = 5.0,
         fps_hint: float = 25.0,
         rules: Optional[ActivityRules] = None,
+        window_size: int = 15,
+        use_ema: bool = False,
+        ema_alpha: float = 0.2,
     ) -> None:
         self.use_pose = use_pose
         self.use_objects = use_objects
         self.use_motion = use_motion
         self.rules = rules or ActivityRules()
 
-        # نافذة تنعيم بعدد إطارات تقديري (زدنا الزمن لتنعيم أفضل)
-        self.window_size = max(1, int(smoothing_seconds * 2.0 * max(fps_hint, 1.0)))
+        # إعدادات التنعيم الزمني
+        self.window_size = window_size if window_size > 0 else max(1, int(smoothing_seconds * 2.0 * max(fps_hint, 1.0)))
+        self.use_ema = use_ema
+        self.ema_alpha = ema_alpha
         self.histories: Dict[int, Deque[ActivityResult]] = {}
+        self.ema_confidences: Dict[int, Dict[str, float]] = {}  # لحفظ EMA confidence لكل نشاط
         self.prev_boxes: Dict[int, Tuple[int, int, int, int]] = {}
         self.prev_times: Dict[int, float] = {}
 
@@ -255,12 +261,39 @@ class ActivityRecognizer:
 
         # تنعيم زمني لكل track
         if track_id is not None:
-            hist = self.histories.setdefault(track_id, deque(maxlen=self.window_size))
-            hist.append(result)
-            # تجميع عبر النوافذ: اختيار النشاط الأكثر تكراراً، ومتوسط الثقة لهذا النشاط
-            most_common = Counter([r.activity for r in hist]).most_common(1)[0][0]
-            confs = [r.confidence for r in hist if r.activity == most_common]
-            smoothed = ActivityResult(activity=most_common, confidence=float(np.mean(confs) if confs else result.confidence), details=result.details)
+            if self.use_ema:
+                # استخدام EMA للتنعيم
+                ema_dict = self.ema_confidences.setdefault(track_id, {})
+                current_activity = result.activity
+                current_conf = result.confidence
+                
+                # تحديث EMA للنشاط الحالي
+                if current_activity in ema_dict:
+                    ema_dict[current_activity] = self.ema_alpha * current_conf + (1 - self.ema_alpha) * ema_dict[current_activity]
+                else:
+                    ema_dict[current_activity] = current_conf
+                
+                # تقليل confidence للأنشطة الأخرى
+                for activity in list(ema_dict.keys()):
+                    if activity != current_activity:
+                        ema_dict[activity] *= (1 - self.ema_alpha * 0.5)
+                        if ema_dict[activity] < 0.1:
+                            del ema_dict[activity]
+                
+                # اختيار النشاط بأعلى EMA confidence
+                if ema_dict:
+                    best_activity = max(ema_dict.keys(), key=lambda k: ema_dict[k])
+                    smoothed = ActivityResult(activity=best_activity, confidence=ema_dict[best_activity], details=result.details)
+                else:
+                    smoothed = result
+            else:
+                # استخدام Majority Vote التقليدي
+                hist = self.histories.setdefault(track_id, deque(maxlen=self.window_size))
+                hist.append(result)
+                # تجميع عبر النوافذ: اختيار النشاط الأكثر تكراراً، ومتوسط الثقة لهذا النشاط
+                most_common = Counter([r.activity for r in hist]).most_common(1)[0][0]
+                confs = [r.confidence for r in hist if r.activity == most_common]
+                smoothed = ActivityResult(activity=most_common, confidence=float(np.mean(confs) if confs else result.confidence), details=result.details)
             return smoothed
         else:
             return result
