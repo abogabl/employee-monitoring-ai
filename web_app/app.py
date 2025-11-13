@@ -501,17 +501,17 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                 config = ensure_consistency()
                 logger.info("✓ تم ضمان الاتساق في النظام")
                 
-                # استخدام الإعدادات المحسنة من config
-                optimized_confidence = config.get('yolo', {}).get('confidence', 0.5)
-                logger.info(f"✓ استخدام confidence محسن: {optimized_confidence}")
+                # استخدام الإعدادات من config (القيم الأصلية المجربة)
+                optimized_confidence = config.get('yolo', {}).get('confidence', 0.35)
+                logger.info(f"✓ استخدام confidence من الإعدادات: {optimized_confidence}")
                 
             except Exception as e:
                 logger.warning(f"تعذر ضمان الاتساق: {e}")
                 config = None
-                optimized_confidence = 0.5  # قيمة افتراضية محسنة
+                optimized_confidence = 0.35  # القيمة الأصلية المجربة
             
-            # تهيئة معالج المستوى الثاني مع الإعدادات المحسنة
-            logger.info("تهيئة Level2VideoProcessor مع الإعدادات المحسنة لدقة كشف الأشخاص...")
+            # تهيئة معالج المستوى الثاني مع الإعدادات الأصلية المجربة
+            logger.info("تهيئة Level2VideoProcessor مع الإعدادات الأصلية المجربة...")
             processor = Level2VideoProcessor(
                 device="cpu",
                 imgsz=416,  # حجم متوازن
