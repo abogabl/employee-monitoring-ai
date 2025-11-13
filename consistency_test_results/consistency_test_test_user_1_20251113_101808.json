@@ -1,0 +1,115 @@
+{
+  "test_info": {
+    "team_member": "test_user_1",
+    "timestamp": "2025-11-13T10:18:08.598572",
+    "video_path": "web_app\\static\\uploads\\test_videos\\test_sample.mp4",
+    "video_size": 205434,
+    "video_hash": "90b4addb0961f39f0e978c3851cbe565"
+  },
+  "system_info": {
+    "python_version": "3.10.0",
+    "platform": "win32",
+    "numpy_version": "1.26.4",
+    "opencv_version": "4.12.0",
+    "torch_version": "2.9.0+cpu",
+    "cuda_available": false,
+    "random_state_sample": "[42, 3107752595, 1895908407, 3900362577, 3030691166]",
+    "deterministic_mode": true,
+    "environment_vars": {
+      "PYTHONHASHSEED": "42",
+      "CUBLAS_WORKSPACE_CONFIG": ":4096:8"
+    }
+  },
+  "config_used": {
+    "system": {
+      "random_seed": 42,
+      "deterministic_mode": true,
+      "testing_mode": true,
+      "consistency_version": "1.0"
+    },
+    "yolo": {
+      "model": "yolov8s.pt",
+      "imgsz": 416,
+      "confidence": 0.35,
+      "iou": 0.7,
+      "device": "cpu",
+      "max_det": 300,
+      "agnostic_nms": false,
+      "classes": [
+        0
+      ],
+      "verbose": false
+    },
+    "level2_processor": {
+      "frame_skip": 3,
+      "activity_window": 15,
+      "enable_advanced_ai": true,
+      "enable_face_recognition": true,
+      "enable_activity_recognition": true,
+      "conf_threshold": 0.35,
+      "yolo_model": "s",
+      "random_seed": 42
+    },
+    "tracking": {
+      "type": "bytetrack",
+      "track_high_thresh": 0.6,
+      "track_low_thresh": 0.1,
+      "new_track_thresh": 0.7,
+      "max_age": 30,
+      "match_thresh": 0.8
+    },
+    "ai_thresholds": {
+      "anomaly_threshold": 0.7,
+      "risk_threshold": 0.6,
+      "prediction_confidence": 0.5,
+      "face_similarity": 0.6
+    },
+    "performance": {
+      "max_duration": 300,
+      "enable_progress_tracking": true,
+      "log_level": "INFO",
+      "save_snapshots": true,
+      "snapshot_quality": 95
+    },
+    "consistency_settings": {
+      "sort_detections": true,
+      "sort_by": [
+        "confidence",
+        "x1",
+        "y1"
+      ],
+      "round_precision": 6,
+      "fixed_timestamps": false,
+      "deterministic_processing": true
+    }
+  },
+  "results": {
+    "success": true,
+    "statistics": [],
+    "processing_time": 2.0954322814941406,
+    "processed_frames": 30,
+    "total_persons": 0,
+    "known_persons": 0,
+    "total_activities": 0,
+    "ai_insights": {
+      "anomalies_detected": 0,
+      "high_risk_persons": 0,
+      "medium_risk_persons": 0,
+      "predictions_made": 0,
+      "behavior_patterns_found": 0,
+      "ai_enabled": true
+    },
+    "frame_analyses": [],
+    "system_recommendations": [
+      "لا توجد بيانات كافية للتوصيات"
+    ]
+  },
+  "results_hash": "baff310294b3d428e77694b0fccc4d00",
+  "consistency_markers": {
+    "total_persons": 0,
+    "total_working_time": 0,
+    "total_activities": 0,
+    "anomalies_detected": 0,
+    "high_risk_persons": 0
+  }
+}

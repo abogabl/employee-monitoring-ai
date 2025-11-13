@@ -1,0 +1,56 @@
+{
+  "video_path": "web_app\\static\\uploads\\test_videos\\test_sample.mp4",
+  "video_info": {
+    "path": "web_app\\static\\uploads\\test_videos\\test_sample.mp4",
+    "size_mb": 0.19591712951660156,
+    "total_frames": 90,
+    "fps": 30.0,
+    "width": 640,
+    "height": 480,
+    "duration_sec": 3.0
+  },
+  "analyses": [
+    {
+      "error": "Level2VideoProcessor.process_video() got an unexpected keyword argument 'progress_callback'",
+      "config": {
+        "name": "default",
+        "confidence": 0.35,
+        "iou": 0.7
+      }
+    },
+    {
+      "error": "Level2VideoProcessor.process_video() got an unexpected keyword argument 'progress_callback'",
+      "config": {
+        "name": "strict",
+        "confidence": 0.6,
+        "iou": 0.5
+      }
+    },
+    {
+      "error": "Level2VideoProcessor.process_video() got an unexpected keyword argument 'progress_callback'",
+      "config": {
+        "name": "loose",
+        "confidence": 0.25,
+        "iou": 0.8
+      }
+    },
+    {
+      "error": "Level2VideoProcessor.process_video() got an unexpected keyword argument 'progress_callback'",
+      "config": {
+        "name": "balanced",
+        "confidence": 0.45,
+        "iou": 0.6
+      }
+    }
+  ],
+  "comparison_summary": {
+    "config_results": {},
+    "best_config": null,
+    "most_consistent": null,
+    "fastest": null
+  },
+  "recommendations": [
+    "❌ لم يتم الحصول على نتائج صحيحة"
+  ],
+  "timestamp": "2025-11-13 11:48:48"
+}

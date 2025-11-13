@@ -495,17 +495,33 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             enable_face = True
             enable_activity = True
             
-            # تهيئة معالج المستوى الثاني مع الذكاء الاصطناعي المتقدم
-            logger.info("تهيئة Level2VideoProcessor مع الذكاء الاصطناعي المتقدم...")
+            # ضمان الاتساق في النتائج
+            try:
+                from ensure_consistency import ensure_consistency
+                config = ensure_consistency()
+                logger.info("✓ تم ضمان الاتساق في النظام")
+                
+                # استخدام الإعدادات المحسنة من config
+                optimized_confidence = config.get('yolo', {}).get('confidence', 0.5)
+                logger.info(f"✓ استخدام confidence محسن: {optimized_confidence}")
+                
+            except Exception as e:
+                logger.warning(f"تعذر ضمان الاتساق: {e}")
+                config = None
+                optimized_confidence = 0.5  # قيمة افتراضية محسنة
+            
+            # تهيئة معالج المستوى الثاني مع الإعدادات المحسنة
+            logger.info("تهيئة Level2VideoProcessor مع الإعدادات المحسنة لدقة كشف الأشخاص...")
             processor = Level2VideoProcessor(
                 device="cpu",
                 imgsz=416,  # حجم متوازن
-                conf_threshold=0.35,  # العتبة المحسنة
+                conf_threshold=optimized_confidence,  # العتبة المحسنة لدقة أفضل
                 enable_face_recognition=enable_face,
                 enable_activity_recognition=enable_activity,
                 enable_advanced_ai=True,  # تفعيل الذكاء الاصطناعي المتقدم
                 yolo_model="s",  # small للتوازن بين السرعة والدقة
-                activity_window=15  # نافذة تنعيم محسنة
+                activity_window=15,  # نافذة تنعيم محسنة
+                random_seed=42  # ضمان الاتساق في النتائج
             )
             logger.info("تم تهيئة معالج المستوى الثاني بنجاح")
             
