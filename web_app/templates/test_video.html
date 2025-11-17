@@ -444,9 +444,14 @@ function displayResults(data) {
   
   // تحديث الإحصائيات من البيانات الفعلية
   const statistics = data.statistics || [];
-  const totalPersons = statistics.length;
+  
+  // ✅ استخدام العدد الصحيح من المعالج المحسّن
+  const totalPersons = data.unique_persons_detected || data.total_persons || statistics.length;
   const knownPersons = statistics.filter(s => s.name && s.name !== 'Unknown').length;
   const totalActivities = statistics.reduce((sum, s) => sum + (s.count || 0), 0);
+  
+  console.log('✅ العدد الصحيح للأشخاص:', totalPersons);
+  console.log('📊 Statistics القديمة:', statistics.length);
   
   document.getElementById('totalPersons').textContent = totalPersons;
   document.getElementById('knownPersons').textContent = knownPersons;
@@ -466,7 +471,30 @@ function displayResults(data) {
   
   // عرض جدول الإحصائيات
   console.log('📊 Statistics data:', data.statistics);
-  displayStatsTable(data.statistics || []);
+  console.log('📊 Person Identities:', data.person_identities);
+  
+  // ✅ استخدام person_identities المحسنة إذا كانت موجودة
+  let displayData = data.statistics || [];
+  if (data.person_identities && Object.keys(data.person_identities).length > 0) {
+    console.log('✅ استخدام person_identities المحسنة');
+    displayData = Object.values(data.person_identities);
+  } else {
+    console.log('⚠️ person_identities فارغة، استخدام statistics');
+    // تحويل statistics لنفس الشكل المتوقع
+    displayData = (data.statistics || []).map((stat, idx) => ({
+      name: stat.name || 'Unknown',
+      snapshot: stat.snapshot,
+      quality: stat.avg_confidence || 0,
+      track_ids: [stat.track_id || idx],
+      total_frames: stat.count || 0,
+      working_duration: stat.working_duration || 0,
+      sleeping_duration: stat.sleeping_duration || 0,
+      phone_duration: stat.phone_duration || 0,
+      duration: stat.duration || 0
+    }));
+  }
+  
+  displayStatsTable(displayData);
   
   // رسم الرسوم البيانية
   drawCharts(data.statistics || []);
@@ -560,7 +588,7 @@ function displayStatsTable(statistics) {
     return;
   }
   
-  statistics.forEach(stat => {
+  statistics.forEach((stat, index) => {
     const row = document.createElement('tr');
     
     // صورة الشخص
@@ -568,13 +596,26 @@ function displayStatsTable(statistics) {
       ? `<img src="/static/${stat.snapshot}" alt="${stat.name}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">` 
       : '<div style="width: 60px; height: 60px; background: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center;"><i class="bi bi-person-fill text-muted"></i></div>';
     
+    // معلومات إضافية للمعالج المحسن
+    const qualityBadge = stat.quality 
+      ? `<br><small class="text-muted">جودة: ${(stat.quality * 100).toFixed(0)}%</small>` 
+      : '';
+    
+    const trackInfo = stat.track_ids && stat.track_ids.length > 0
+      ? `<br><small class="text-muted">تتبع: ${stat.track_ids.length} IDs</small>`
+      : '';
+    
     row.innerHTML = `
       <td>${snapshotHtml}</td>
-      <td><strong>${stat.name || 'غير معروف'}</strong></td>
+      <td>
+        <strong>${stat.name || 'غير معروف'}</strong>
+        ${qualityBadge}
+        ${trackInfo}
+      </td>
       <td><span class="badge bg-success">${formatDuration(stat.working_duration || 0)}</span></td>
       <td><span class="badge bg-info">${formatDuration(stat.sleeping_duration || 0)}</span></td>
       <td><span class="badge bg-warning">${formatDuration(stat.phone_duration || 0)}</span></td>
-      <td><span class="badge bg-primary">${formatDuration(stat.duration || 0)}</span></td>
+      <td><span class="badge bg-primary">${formatDuration(stat.duration || stat.total_frames ? stat.total_frames / 25 : 0)}</span></td>
     `;
     tbody.appendChild(row);
   });

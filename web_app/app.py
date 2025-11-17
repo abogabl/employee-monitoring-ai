@@ -24,6 +24,7 @@ from src.multi_camera_runner import MultiCameraRunner
 from src.reporting import ReportGenerator
 from .auth import auth_bp, login_required
 from .api import api_bp
+from .routes.self_learning import self_learning_bp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("web_app")
@@ -46,6 +47,7 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     # تسجيل Blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix="/api/v1")
+    app.register_blueprint(self_learning_bp)
 
     # صفحات
     @app.route("/")
@@ -65,6 +67,38 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                                cams_status=cams_status,
                                )
 
+    @app.route("/monitoring")
+    @login_required(role="admin")
+    def monitoring_page():
+        """صفحة المراقبة والتتبع الشاملة"""
+        try:
+            from src.self_learning import SystemMonitor
+            monitor = SystemMonitor()
+            
+            # جمع بيانات المراقبة
+            health_score = monitor.get_health_score()
+            alerts = monitor.run_full_check()
+            dashboard_data = monitor.get_monitoring_dashboard_data()
+            
+            # معلومات الكاميرات
+            cams_status = runner.get_all_status() if runner.cameras else {}
+            
+            # معلومات الحضور
+            today_rows = attendance.get_daily_attendance(date.today())
+            present_now = [r for r in today_rows if r.get("check_out_time") is None]
+            
+            return render_template("monitoring.html",
+                                 health_score=health_score,
+                                 alerts=alerts,
+                                 dashboard_data=dashboard_data,
+                                 cams_status=cams_status,
+                                 present_count=len(set([r["employee_id"] for r in present_now])),
+                                 cameras_active=sum(1 for s in cams_status.values() if s.get("running")))
+        except Exception as e:
+            logger.error(f"خطأ في صفحة المراقبة: {e}")
+            flash(f"خطأ في تحميل المراقبة: {e}", "danger")
+            return redirect(url_for("dashboard"))
+    
     @app.route("/cameras")
     @login_required
     def cameras():
@@ -437,12 +471,19 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             mimetype='image/png'
         )
     
+    @app.route("/static/training_data/<path:filename>")
+    def training_data_files(filename):
+        """عرض صور التدريب"""
+        from pathlib import Path
+        training_data_path = Path("training_data")
+        return send_from_directory(training_data_path, filename)
+    
     @app.post("/test-video/process")
     @login_required
     def test_video_process():
-        """معالجة فيديو الاختبار مع AI حقيقي"""
+        """معالجة فيديو الاختبار مع AI حقيقي محسّن"""
         import time as time_module
-        from src.level2_video_processor import Level2VideoProcessor
+        from src.improved_video_processor import ImprovedVideoProcessor
         from src.file_validator import FileValidator
         
         try:
@@ -510,20 +551,21 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                 config = None
                 optimized_confidence = 0.35  # القيمة الأصلية المجربة
             
-            # تهيئة معالج المستوى الثاني مع الإعدادات الأصلية المجربة
-            logger.info("تهيئة Level2VideoProcessor مع الإعدادات الأصلية المجربة...")
-            processor = Level2VideoProcessor(
+            # تهيئة المعالج المحسّن مع التتبع الذكي والتعلم الذاتي
+            logger.info("تهيئة المعالج المحسّن مع التتبع الذكي...")
+            processor = ImprovedVideoProcessor(
                 device="cpu",
                 imgsz=416,  # حجم متوازن
                 conf_threshold=optimized_confidence,  # العتبة المحسنة لدقة أفضل
                 enable_face_recognition=enable_face,
                 enable_activity_recognition=enable_activity,
                 enable_advanced_ai=True,  # تفعيل الذكاء الاصطناعي المتقدم
+                enable_self_learning=True,  # ✅ تفعيل نظام التعلم الذاتي
                 yolo_model="s",  # small للتوازن بين السرعة والدقة
                 activity_window=15,  # نافذة تنعيم محسنة
                 random_seed=42  # ضمان الاتساق في النتائج
             )
-            logger.info("تم تهيئة معالج المستوى الثاني بنجاح")
+            logger.info("تم تهيئة المعالج المحسّن بنجاح (مع التتبع الذكي + التعلم الذاتي)")
             
             # معالجة الفيديو مع progress tracking
             video_task_id = f"video_{timestamp}"
