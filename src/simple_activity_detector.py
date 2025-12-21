@@ -106,8 +106,8 @@ class SimpleActivityDetector:
             return 'on_phone', confidence
         
         # القاعدة 3: إذا الحركة قليلة جداً → sleeping (threshold محسّن)
-        # فقط للحركة الشبه معدومة تماماً
-        if motion_level < 0.002:
+        # فقط إذا لم يكن هناك كمبيوتر أو هاتف قريب
+        if motion_level < 0.002 and not computer_nearby and not phone_nearby:
             return 'sleeping', 0.85
         
         # القاعدة 4: حركة قليلة جداً → idle (بين النوم والعمل)

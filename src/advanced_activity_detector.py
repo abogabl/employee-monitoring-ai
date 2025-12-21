@@ -104,6 +104,11 @@ class AdvancedActivityDetector:
         self.prev_boxes: Dict[int, Tuple] = {}
         self.activity_history: Dict[int, Deque] = {}
         
+        # إدارة الذاكرة - تنظيف تلقائي
+        self.max_tracks = 100  # الحد الأقصى للـ tracks المحفوظة
+        self._cleanup_counter = 0
+        self._cleanup_interval = 50  # تنظيف كل 50 إطار
+        
         logger.info(f"✓ كاشف نشاط متقدم جاهز | Pose={self.use_pose} | OpticalFlow={self.use_optical_flow}")
     
     def detect_activity(
@@ -120,6 +125,12 @@ class AdvancedActivityDetector:
         Returns:
             (activity, confidence, details)
         """
+        # تنظيف الذاكرة دورياً
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= self._cleanup_interval:
+            self._auto_cleanup()
+            self._cleanup_counter = 0
+        
         x1, y1, x2, y2 = [int(v) for v in person_box]
         
         # تهيئة التاريخ
@@ -266,7 +277,7 @@ class AdvancedActivityDetector:
         person_box: Tuple[int, int, int, int],
         track_id: int
     ) -> float:
-        """حساب الحركة باستخدام Optical Flow"""
+        """حساب الحركة باستخدام Optical Flow المحسّن (Sparse Lucas-Kanade)"""
         try:
             x1, y1, x2, y2 = [int(v) for v in person_box]
             
@@ -280,40 +291,40 @@ class AdvancedActivityDetector:
             if person_gray.size == 0:
                 return 0.0
             
+            # تصغير المنطقة للسرعة (أقصى 100x100)
+            max_dim = 100
+            h, w = person_gray.shape[:2]
+            if h > max_dim or w > max_dim:
+                scale = min(max_dim / h, max_dim / w)
+                new_size = (int(w * scale), int(h * scale))
+                person_gray = cv2.resize(person_gray, new_size)
+            
             # حساب optical flow
             if self.prev_gray is None or track_id not in self.prev_boxes:
                 self.prev_gray = gray
                 self.prev_boxes[track_id] = person_box
+                self._prev_person_grays = getattr(self, '_prev_person_grays', {})
+                self._prev_person_grays[track_id] = person_gray
                 return 0.0
             
-            # استخراج المنطقة السابقة
-            px1, py1, px2, py2 = [int(v) for v in self.prev_boxes[track_id]]
-            prev_person_gray = self.prev_gray[max(0, py1):min(self.prev_gray.shape[0], py2),
-                                             max(0, px1):min(self.prev_gray.shape[1], px2)]
+            # الحصول على الإطار السابق للشخص
+            self._prev_person_grays = getattr(self, '_prev_person_grays', {})
+            prev_person_gray = self._prev_person_grays.get(track_id)
             
-            if prev_person_gray.size == 0 or person_gray.shape != prev_person_gray.shape:
-                self.prev_gray = gray
+            if prev_person_gray is None or person_gray.shape != prev_person_gray.shape:
+                self._prev_person_grays[track_id] = person_gray
                 self.prev_boxes[track_id] = person_box
                 return 0.0
             
-            # حساب dense optical flow
-            flow = cv2.calcOpticalFlowFarneback(
-                prev_person_gray,
-                person_gray,
-                None,
-                **self.flow_params
-            )
-            
-            # حساب magnitude
-            mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-            
-            # متوسط الحركة
-            motion_level = np.mean(mag) / 10.0  # تطبيع
+            # استخدام Frame Difference كطريقة سريعة
+            diff = cv2.absdiff(prev_person_gray, person_gray)
+            motion_level = np.mean(diff) / 50.0  # تطبيع (0-255 -> 0-1)
             motion_level = min(motion_level, 1.0)
             
             # تحديث
             self.prev_gray = gray
             self.prev_boxes[track_id] = person_box
+            self._prev_person_grays[track_id] = person_gray
             
             return float(motion_level)
             
@@ -419,16 +430,18 @@ class AdvancedActivityDetector:
         is_standing = pose_info and pose_info.get('posture') == 'standing'
         head_down = pose_info and pose_info.get('head_down', False)
         hand_activity = pose_info.get('hand_activity', 'none') if pose_info else 'none'
+        eyes_closed = pose_info and pose_info.get('eyes_closed', False) if pose_info else False
         
-        # **قاعدة 1: نوم/خمول** (أعلى أولوية)
-        if motion_level < 0.005 and head_down:
+        # **قاعدة 1: نوم** (أعلى أولوية) - عتبات محسّنة
+        # فقط إذا كان الرأس منخفضاً أو العين مغلقة (أو لا توجد أجهزة قريبة)
+        if motion_level < 0.03 and (head_down or eyes_closed):
             return 'sleeping', 0.95
         
-        if motion_level < 0.01 and not has_computer and not has_phone:
-            return 'idle', 0.85
+        if motion_level < 0.02 and not is_standing and not has_computer and not has_phone:
+            return 'sleeping', 0.85
         
         # **قاعدة 2: استخدام الهاتف**
-        if has_phone and motion_level < 0.15:
+        if has_phone and motion_level < 0.2:
             if hand_activity == 'phone':
                 return 'on_phone', 0.95
             return 'on_phone', 0.85
@@ -443,23 +456,31 @@ class AdvancedActivityDetector:
                 return 'working', 0.85
             return 'working', 0.75
         
-        # **قاعدة 4: المشي/التحرك**
+        # **قاعدة 4: العمل بدون كمبيوتر (جالس ويتحرك)**
+        if is_sitting and 0.02 < motion_level < 0.4:
+            return 'working', 0.80
+        
+        # **قاعدة 5: المشي/التحرك**
         if motion_level > 0.4:
             if is_standing:
                 return 'walking', 0.90
             return 'walking', 0.80
         
-        # **قاعدة 5: الوقوف**
+        # **قاعدة 6: الوقوف**
         if is_standing and motion_level < 0.2:
-            return 'standing', 0.80
+            return 'standing', 0.75
         
-        # **قاعدة 6: الجلوس**
+        # **قاعدة 7: الخمول (بدون حركة كبيرة)**
+        if motion_level < 0.05 and not has_computer and not has_phone:
+            return 'idle', 0.75
+        
+        # **قاعدة 8: الجلوس**
         if is_sitting and motion_level < 0.15:
-            return 'sitting', 0.75
+            return 'sitting', 0.70
         
-        # **افتراضي: working** (في بيئة عمل)
-        if motion_level > 0.01:
-            return 'working', 0.60
+        # **افتراضي: working** (في بيئة عمل - حركة معتدلة)
+        if 0.02 < motion_level < 0.5:
+            return 'working', 0.65
         
         return 'idle', 0.50
     
@@ -469,22 +490,26 @@ class AdvancedActivityDetector:
         activity: str,
         confidence: float
     ) -> Tuple[str, float]:
-        """تنعيم زمني لتقليل التذبذب"""
+        """تنعيم زمني محسّن لتقليل التذبذب مع استجابة أسرع"""
         
         # إضافة للتاريخ
         self.activity_history[track_id].append((activity, confidence))
         
-        # إذا لم يكن هناك تاريخ كافٍ
-        if len(self.activity_history[track_id]) < 5:
+        # تقليل الحد الأدنى للتاريخ للاستجابة الأسرع
+        if len(self.activity_history[track_id]) < 3:
             return activity, confidence
         
-        # حساب النشاط الأكثر تكراراً مع الثقة
+        # حساب النشاط الأكثر تكراراً مع ترجيح الأحدث
         activity_votes: Dict[str, float] = {}
+        history_list = list(self.activity_history[track_id])
+        total_items = len(history_list)
         
-        for act, conf in self.activity_history[track_id]:
+        for i, (act, conf) in enumerate(history_list):
+            # ترجيح أكبر للأنشطة الأحدث
+            weight = 1.0 + (i / total_items) * 0.5  # الأحدث يحصل على وزن أكبر
             if act not in activity_votes:
                 activity_votes[act] = 0.0
-            activity_votes[act] += conf
+            activity_votes[act] += conf * weight
         
         # اختيار الأفضل
         best_activity = max(activity_votes.items(), key=lambda x: x[1])
@@ -494,7 +519,7 @@ class AdvancedActivityDetector:
         smoothed_confidence = best_activity[1] / total_confidence
         
         # تطبيق الحد الأدنى/الأقصى
-        smoothed_confidence = min(max(smoothed_confidence, 0.3), 0.98)
+        smoothed_confidence = min(max(smoothed_confidence, 0.35), 0.98)
         
         return best_activity[0], smoothed_confidence
     
@@ -512,3 +537,30 @@ class AdvancedActivityDetector:
         
         for track_id in old_ids:
             self.reset_track(track_id)
+    
+    def _auto_cleanup(self):
+        """تنظيف تلقائي عند تجاوز الحد الأقصى للـ tracks"""
+        current_count = len(self.activity_history)
+        
+        if current_count <= self.max_tracks:
+            return
+        
+        # حذف أقدم الـ tracks (أصغر IDs عادةً)
+        excess = current_count - self.max_tracks
+        track_ids = sorted(self.activity_history.keys())
+        
+        for track_id in track_ids[:excess]:
+            self.reset_track(track_id)
+        
+        if excess > 0:
+            logger.debug(f"تم تنظيف {excess} tracks قديمة | الحالي: {len(self.activity_history)}")
+    
+    def get_memory_stats(self) -> Dict[str, int]:
+        """إحصائيات استخدام الذاكرة"""
+        return {
+            'activity_history_count': len(self.activity_history),
+            'prev_boxes_count': len(self.prev_boxes),
+            'track_history_count': len(self.track_history),
+            'max_tracks': self.max_tracks
+        }
+

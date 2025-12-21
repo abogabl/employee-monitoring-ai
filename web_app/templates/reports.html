@@ -1,22 +1,185 @@
 {% extends 'base.html' %}
 {% block content %}
-<h3>التقارير</h3>
-<form method="post" action="{{ url_for('reports_generate') }}" class="row g-2">
-  <div class="col-md-3">
-    <label class="form-label">نوع التقرير</label>
-    <select name="type" class="form-select">
-      <option value="daily">تقرير يومي</option>
-    </select>
-  </div>
-  <div class="col-md-3">
-    <label class="form-label">التاريخ</label>
-    <input type="date" name="date" value="{{ request.args.get('date', '') }}" class="form-control" />
-  </div>
-  <div class="col-md-3 align-self-end">
-    <button class="btn btn-primary">توليد</button>
-  </div>
-</form>
-<div class="mt-4">
-  <p>يمكن توسيع الصفحة لاحقاً لدعم تقارير الفترة/المقارنة والجداول الزمنية.</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-file-earmark-bar-graph-fill me-2"></i>التقارير</h2>
+  <span class="badge bg-primary fs-6">
+    <i class="bi bi-calendar3 me-1"></i>{{ request.args.get('date', 'اليوم') }}
+  </span>
 </div>
+
+<!-- أنواع التقارير -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card h-100 report-type-card" data-type="daily">
+      <div class="card-body text-center">
+        <div class="report-icon bg-primary">
+          <i class="bi bi-calendar-day"></i>
+        </div>
+        <h5 class="mt-3">تقرير يومي</h5>
+        <p class="text-muted small">ملخص الحضور والأنشطة ليوم واحد</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100 report-type-card" data-type="weekly">
+      <div class="card-body text-center">
+        <div class="report-icon bg-success">
+          <i class="bi bi-calendar-week"></i>
+        </div>
+        <h5 class="mt-3">تقرير أسبوعي</h5>
+        <p class="text-muted small">ملخص أداء الأسبوع كاملاً</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100 report-type-card" data-type="monthly">
+      <div class="card-body text-center">
+        <div class="report-icon bg-warning">
+          <i class="bi bi-calendar-month"></i>
+        </div>
+        <h5 class="mt-3">تقرير شهري</h5>
+        <p class="text-muted small">إحصائيات تفصيلية للشهر</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100 report-type-card" data-type="activity">
+      <div class="card-body text-center">
+        <div class="report-icon bg-info">
+          <i class="bi bi-activity"></i>
+        </div>
+        <h5 class="mt-3">تقرير الأنشطة</h5>
+        <p class="text-muted small">تحليل سلوك وأنشطة الموظفين</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- نموذج إنشاء التقرير -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>إنشاء تقرير جديد</h5>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('reports_generate') }}" class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-bold"><i class="bi bi-file-text me-1"></i>نوع التقرير</label>
+        <select name="type" id="reportType" class="form-select">
+          <option value="daily">تقرير يومي</option>
+          <option value="weekly">تقرير أسبوعي</option>
+          <option value="monthly">تقرير شهري</option>
+          <option value="activity">تقرير الأنشطة</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold"><i class="bi bi-calendar me-1"></i>من تاريخ</label>
+        <input type="date" name="start_date" value="{{ request.args.get('date', '') }}" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold"><i class="bi bi-calendar me-1"></i>إلى تاريخ</label>
+        <input type="date" name="end_date" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold"><i class="bi bi-download me-1"></i>التنسيق</label>
+        <select name="format" class="form-select">
+          <option value="html">عرض في المتصفح</option>
+          <option value="pdf">PDF</option>
+          <option value="excel">Excel</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-bold"><i class="bi bi-people me-1"></i>الموظفون</label>
+        <select name="employees" class="form-select" multiple>
+          <option value="all" selected>جميع الموظفين</option>
+        </select>
+        <small class="text-muted">اضغط Ctrl للاختيار المتعدد</small>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-bold"><i class="bi bi-building me-1"></i>الأقسام</label>
+        <select name="departments" class="form-select" multiple>
+          <option value="all" selected>جميع الأقسام</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <hr>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-file-earmark-plus me-2"></i>إنشاء التقرير
+          </button>
+          <button type="reset" class="btn btn-secondary btn-lg">
+            <i class="bi bi-arrow-counterclockwise me-2"></i>إعادة تعيين
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- التقارير الأخيرة -->
+<div class="card">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>التقارير الأخيرة</h5>
+    <a href="#" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th><i class="bi bi-file-text me-1"></i>التقرير</th>
+            <th><i class="bi bi-calendar me-1"></i>التاريخ</th>
+            <th><i class="bi bi-tag me-1"></i>النوع</th>
+            <th><i class="bi bi-gear me-1"></i>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="4" class="text-center py-4">
+              <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+              <p class="text-muted mt-2 mb-0">لا توجد تقارير سابقة</p>
+              <small class="text-muted">أنشئ أول تقرير باستخدام النموذج أعلاه</small>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+.report-type-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+.report-type-card:hover {
+  border-color: #667eea;
+  transform: translateY(-5px);
+}
+.report-type-card.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+.report-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+}
+</style>
+
+<script>
+document.querySelectorAll('.report-type-card').forEach(card => {
+  card.addEventListener('click', function() {
+    document.querySelectorAll('.report-type-card').forEach(c => c.classList.remove('selected'));
+    this.classList.add('selected');
+    document.getElementById('reportType').value = this.dataset.type;
+  });
+});
+</script>
 {% endblock %}

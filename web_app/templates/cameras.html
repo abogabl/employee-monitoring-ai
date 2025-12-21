@@ -52,6 +52,7 @@
             <th>المصدر</th>
             <th>الموقع</th>
             <th>الحالة</th>
+            <th>imgsz/conf</th>
             <th>الصحة</th>
             <th>الإجراءات</th>
           </tr>
@@ -93,6 +94,10 @@
               {% else %}
               <span class="badge bg-secondary">غير نشطة</span>
               {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-light text-dark">{{ c.get('imgsz', 640) }}</span>
+              <span class="badge bg-light text-dark">{{ c.get('conf', 0.5) }}</span>
             </td>
             <td>
               {% if st and st.running %}
@@ -149,6 +154,8 @@
                         data-camera-location="{{ c.get('location', '') }}"
                         data-camera-priority="{{ c.get('priority', 2) }}"
                         data-camera-fps="{{ c.get('fps', 25) }}"
+                        data-camera-imgsz="{{ c.get('imgsz', 640) }}"
+                        data-camera-conf="{{ c.get('conf', 0.5) }}"
                         onclick="editCamera(this)">
                   <i class="bi bi-pencil-fill"></i>
                 </button>
@@ -261,6 +268,16 @@
                 <option value="cuda">GPU (CUDA)</option>
               </select>
             </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-bold">حجم الصورة (imgsz)</label>
+              <input type="number" name="imgsz" class="form-control" value="640" step="32" min="32">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-bold">عتبة الثقة (conf)</label>
+              <input type="number" name="conf" class="form-control" value="0.5" step="0.01" min="0" max="1">
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -332,6 +349,16 @@
                 <option value="cuda">GPU (CUDA)</option>
               </select>
             </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-bold">حجم الصورة (imgsz)</label>
+              <input type="number" name="imgsz" id="edit_imgsz" class="form-control" step="32">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-bold">عتبة الثقة (conf)</label>
+              <input type="number" name="conf" id="edit_conf" class="form-control" step="0.01" min="0" max="1">
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -395,6 +422,8 @@ function editCamera(button) {
   document.getElementById('edit_priority').value = dataset.cameraPriority || 2;
   document.getElementById('edit_enabled').value = dataset.cameraEnabled === 'True' ? 'true' : 'false';
   document.getElementById('edit_device').value = dataset.cameraDevice || 'cpu';
+  document.getElementById('edit_imgsz').value = dataset.cameraImgsz || 640;
+  document.getElementById('edit_conf').value = dataset.cameraConf || 0.5;
   
   new bootstrap.Modal(document.getElementById('editCameraModal')).show();
 }

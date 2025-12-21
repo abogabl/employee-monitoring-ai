@@ -754,13 +754,12 @@ class VideoTestProcessor:
                 # حساب المدة لكل نشاط
                 for activity, frames_list in activity_frame_map.items():
                     if frames_list:
-                        first_frame = min(frames_list)
-                        last_frame = max(frames_list)
-                        duration_seconds = (last_frame - first_frame + 1) / fps
+                        # تصحيح: استخدام العدد الفعلي للإطارات مضروباً في frame_skip بدلاً من الفارق الزمني (Span)
+                        # لضمان عدم احتساب الفجوات الزمنية في حال توقف النشاط وعودته
+                        duration_seconds = (len(frames_list) * frame_skip) / fps
                         activity_durations[activity] = duration_seconds
                         logger.info(f"      ✓ {activity}: {len(frames_list)} occurrences")
-                        logger.info(f"         - frames {first_frame} to {last_frame}")
-                        logger.info(f"         - calculation: ({last_frame} - {first_frame} + 1) / {fps} = {duration_seconds:.2f}s")
+                        logger.info(f"         - calculation: ({len(frames_list)} * {frame_skip}) / {fps} = {duration_seconds:.2f}s")
             else:
                 logger.warning(f"   ⚠️ Activities/frames mismatch! Using simple estimation...")
                 # Fallback بسيط

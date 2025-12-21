@@ -1,15 +1,212 @@
 {% extends 'base.html' %}
 {% block content %}
-<h3>سجلات النظام</h3>
-<form class="row g-2 mb-3" method="get">
-  <div class="col-auto">
-    <label class="form-label">بحث</label>
-    <input name="q" class="form-control" value="{{ request.args.get('q','') }}" />
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-journal-text me-2"></i>سجلات النظام</h2>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-danger" onclick="clearLogs()" title="مسح السجلات">
+      <i class="bi bi-trash me-1"></i>مسح
+    </button>
+    <button class="btn btn-outline-primary" onclick="refreshLogs()" title="تحديث">
+      <i class="bi bi-arrow-clockwise me-1"></i>تحديث
+    </button>
+    <a class="btn btn-success" href="#" id="downloadLogs" title="تحميل">
+      <i class="bi bi-download me-1"></i>تحميل
+    </a>
   </div>
-  <div class="col-auto align-self-end">
-    <button class="btn btn-secondary">بحث</button>
+</div>
+
+<!-- فلاتر البحث -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form class="row g-3" method="get" id="logsFilterForm">
+      <div class="col-md-4">
+        <label class="form-label fw-bold"><i class="bi bi-search me-1"></i>بحث</label>
+        <input name="q" class="form-control" placeholder="ابحث في السجلات..." value="{{ request.args.get('q','') }}" />
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold"><i class="bi bi-funnel me-1"></i>المستوى</label>
+        <select name="level" class="form-select">
+          <option value="">الكل</option>
+          <option value="INFO" {% if request.args.get('level') == 'INFO' %}selected{% endif %}>ℹ️ INFO</option>
+          <option value="WARNING" {% if request.args.get('level') == 'WARNING' %}selected{% endif %}>⚠️ WARNING</option>
+          <option value="ERROR" {% if request.args.get('level') == 'ERROR' %}selected{% endif %}>❌ ERROR</option>
+          <option value="DEBUG" {% if request.args.get('level') == 'DEBUG' %}selected{% endif %}>🔍 DEBUG</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold"><i class="bi bi-calendar me-1"></i>من تاريخ</label>
+        <input type="date" name="from_date" class="form-control" value="{{ request.args.get('from_date','') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold"><i class="bi bi-calendar me-1"></i>إلى تاريخ</label>
+        <input type="date" name="to_date" class="form-control" value="{{ request.args.get('to_date','') }}">
+      </div>
+      <div class="col-md-2 align-self-end">
+        <button class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i>بحث
+        </button>
+      </div>
+    </form>
   </div>
-</form>
-<pre style="max-height:60vh; overflow:auto; background:#111; color:#0f0; padding:12px;">{% for line in lines %}{{ line }}
-{% endfor %}</pre>
+</div>
+
+<!-- إحصائيات السجلات -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="stat-card primary">
+      <i class="bi bi-journal-text stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="totalLogs">{{ lines|length }}</h2>
+      <p class="stat-label mb-0">إجمالي السجلات</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card info">
+      <i class="bi bi-info-circle stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="infoCount">0</h2>
+      <p class="stat-label mb-0">معلومات</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card warning">
+      <i class="bi bi-exclamation-triangle stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="warningCount">0</h2>
+      <p class="stat-label mb-0">تحذيرات</p>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card danger">
+      <i class="bi bi-x-octagon stat-icon position-absolute end-0 top-0 me-3 mt-3"></i>
+      <h2 class="stat-value" id="errorCount">0</h2>
+      <p class="stat-label mb-0">أخطاء</p>
+    </div>
+  </div>
+</div>
+
+<!-- عرض السجلات -->
+<div class="card">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="bi bi-terminal me-2"></i>عرض السجلات</h5>
+    <div class="d-flex gap-2">
+      <span class="badge bg-success" id="liveIndicator">
+        <i class="bi bi-circle-fill me-1 blink"></i>مباشر
+      </span>
+      <button class="btn btn-sm btn-outline-light" onclick="toggleAutoScroll()" id="autoScrollBtn">
+        <i class="bi bi-arrow-down-circle"></i>
+      </button>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="log-container" id="logContainer">
+      {% if lines %}
+        {% for line in lines %}
+        <div class="log-line {% if 'ERROR' in line %}log-error{% elif 'WARNING' in line %}log-warning{% elif 'INFO' in line %}log-info{% else %}log-debug{% endif %}">{{ line }}</div>
+        {% endfor %}
+      {% else %}
+      <div class="text-center py-5">
+        <i class="bi bi-journal-x display-1 text-muted"></i>
+        <h4 class="mt-3 text-muted">لا توجد سجلات</h4>
+        <p class="text-muted">السجلات ستظهر هنا عند تشغيل النظام</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+.log-container {
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #1a1a2e;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.85rem;
+  direction: ltr;
+  text-align: left;
+}
+.log-line {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: #a0aec0;
+  transition: background 0.2s;
+}
+.log-line:hover {
+  background: rgba(255,255,255,0.05);
+}
+.log-error {
+  color: #fc8181;
+  background: rgba(252, 129, 129, 0.1);
+}
+.log-warning {
+  color: #f6e05e;
+  background: rgba(246, 224, 94, 0.05);
+}
+.log-info {
+  color: #63b3ed;
+}
+.log-debug {
+  color: #68d391;
+}
+.blink {
+  animation: blink 1s infinite;
+}
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}
+
+/* تخصيص scrollbar */
+.log-container::-webkit-scrollbar {
+  width: 8px;
+}
+.log-container::-webkit-scrollbar-track {
+  background: #0f0f1a;
+}
+.log-container::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 4px;
+}
+</style>
+
+<script>
+let autoScroll = true;
+
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  const btn = document.getElementById('autoScrollBtn');
+  btn.classList.toggle('btn-outline-light', autoScroll);
+  btn.classList.toggle('btn-light', !autoScroll);
+}
+
+function refreshLogs() {
+  location.reload();
+}
+
+function clearLogs() {
+  if (confirm('هل أنت متأكد من مسح جميع السجلات؟')) {
+    // يمكن إضافة endpoint للمسح
+    alert('ميزة المسح قيد التطوير');
+  }
+}
+
+// حساب الإحصائيات
+document.addEventListener('DOMContentLoaded', function() {
+  const lines = document.querySelectorAll('.log-line');
+  let info = 0, warning = 0, error = 0;
+  
+  lines.forEach(line => {
+    if (line.classList.contains('log-info')) info++;
+    else if (line.classList.contains('log-warning')) warning++;
+    else if (line.classList.contains('log-error')) error++;
+  });
+  
+  document.getElementById('infoCount').textContent = info;
+  document.getElementById('warningCount').textContent = warning;
+  document.getElementById('errorCount').textContent = error;
+  
+  // التمرير للأسفل
+  const container = document.getElementById('logContainer');
+  if (autoScroll && container) {
+    container.scrollTop = container.scrollHeight;
+  }
+});
+</script>
 {% endblock %}

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedFaceRecognition:
-    """نظام تعرف على الوجوه محسّن"""
+    """نظام تعرف على الوجوه محسّن مع دعم GPU"""
     
     def __init__(
         self,
@@ -37,7 +37,8 @@ class EnhancedFaceRecognition:
         det_size: Tuple[int, int] = (640, 640),
         similarity_threshold: float = 0.45,
         quality_threshold: float = 0.3,
-        use_multi_scale: bool = True
+        use_multi_scale: bool = True,
+        prefer_gpu: bool = True  # تفضيل GPU إذا متاح
     ):
         """
         Args:
@@ -46,6 +47,7 @@ class EnhancedFaceRecognition:
             similarity_threshold: عتبة التشابه (أقل = أكثر صرامة)
             quality_threshold: الحد الأدنى لجودة الوجه
             use_multi_scale: استخدام كشف متعدد المقاييس
+            prefer_gpu: تفضيل GPU إذا كان متاحاً
         """
         self.similarity_threshold = similarity_threshold
         self.quality_threshold = quality_threshold
@@ -54,9 +56,14 @@ class EnhancedFaceRecognition:
         if not INSIGHTFACE_AVAILABLE:
             raise ImportError("InsightFace مطلوب. قم بتثبيته: pip install insightface")
         
+        # تحديد مزودي التنفيذ بالترتيب (GPU أولاً إذا مفضّل)
+        providers = self._get_execution_providers(prefer_gpu)
+        self.using_gpu = 'CUDAExecutionProvider' in providers or 'TensorrtExecutionProvider' in providers
+        
         # تهيئة InsightFace
-        self.app = FaceAnalysis(name=model_name, providers=['CPUExecutionProvider'])
-        self.app.prepare(ctx_id=-1, det_size=det_size)
+        self.app = FaceAnalysis(name=model_name, providers=providers)
+        ctx_id = 0 if self.using_gpu else -1
+        self.app.prepare(ctx_id=ctx_id, det_size=det_size)
         
         # قاعدة بيانات الموظفين
         self.embeddings_db: Dict[str, List[np.ndarray]] = {}
@@ -68,11 +75,52 @@ class EnhancedFaceRecognition:
         # تحميل قاعدة البيانات
         self._load_database()
         
+        device_info = "GPU (CUDA)" if self.using_gpu else "CPU"
         logger.info(f"✓ نظام التعرف على الوجوه المحسّن جاهز")
+        logger.info(f"  - Device: {device_info}")
+        logger.info(f"  - Providers: {providers}")
         logger.info(f"  - Similarity threshold: {similarity_threshold}")
         logger.info(f"  - Quality threshold: {quality_threshold}")
         logger.info(f"  - Multi-scale: {use_multi_scale}")
         logger.info(f"  - Employees in DB: {len(self.embeddings_db)}")
+    
+    @staticmethod
+    def _get_execution_providers(prefer_gpu: bool = True) -> List[str]:
+        """الحصول على مزودي التنفيذ المتاحين"""
+        available_providers = []
+        
+        if prefer_gpu:
+            # محاولة استخدام TensorRT (الأسرع)
+            try:
+                import onnxruntime as ort
+                if 'TensorrtExecutionProvider' in ort.get_available_providers():
+                    available_providers.append('TensorrtExecutionProvider')
+                    logger.info("✓ TensorRT متاح")
+            except Exception:
+                pass
+            
+            # محاولة استخدام CUDA
+            try:
+                import onnxruntime as ort
+                if 'CUDAExecutionProvider' in ort.get_available_providers():
+                    available_providers.append('CUDAExecutionProvider')
+                    logger.info("✓ CUDA متاح")
+            except Exception:
+                pass
+            
+            # محاولة استخدام DirectML (Windows)
+            try:
+                import onnxruntime as ort
+                if 'DmlExecutionProvider' in ort.get_available_providers():
+                    available_providers.append('DmlExecutionProvider')
+                    logger.info("✓ DirectML متاح")
+            except Exception:
+                pass
+        
+        # CPU كخيار أخير دائماً
+        available_providers.append('CPUExecutionProvider')
+        
+        return available_providers
     
     def add_employee(
         self,

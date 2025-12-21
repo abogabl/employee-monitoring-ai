@@ -22,44 +22,44 @@ DEFAULT_ACTIVITIES = ["working", "on_phone", "sleeping", "idle", "meeting", "awa
 DEFAULT_RULES: Dict[str, Dict[str, Any]] = {
     "working": {
         "conditions": [
-            {"sitting": True, "weight": 0.4},
-            {"computer_nearby": True, "weight": 1.0},  # أهم شرط
+            {"sitting": True, "weight": 0.3},
+            {"computer_nearby": True, "weight": 1.2},  # Increased weight for computer
             {"hands_forward": True, "weight": 0.5},
-            {"motion_level": "0.01-0.6", "weight": 0.3},
+            {"motion_level": "0.01-0.6", "weight": 0.4},
         ],
-        "min_score": 0.4,  # خفضنا الحد أكثر
+        "min_score": 0.45,
     },
     "on_phone": {
         "conditions": [
-            {"hand_near_face": True, "weight": 0.8},
-            {"phone_nearby": True, "weight": 0.7},
-            {"sitting": True, "weight": 0.3},
+            {"hand_near_face": True, "weight": 0.9},
+            {"phone_nearby": True, "weight": 0.8},
+            {"sitting": True, "weight": 0.2},
             {"motion_level": "<0.3", "weight": 0.3},
         ],
-        "min_score": 0.6,  # خفضنا الحد
+        "min_score": 0.65,
     },
     "sleeping": {
         "conditions": [
-            {"sitting": True, "weight": 0.5},
-            {"hand_near_face": True, "weight": 0.7},  # رأس على اليد
-            {"motion_level": "<0.02", "weight": 0.9},  # حركة شبه معدومة
+            {"sitting": True, "weight": 0.4},
+            {"hand_near_face": True, "weight": 0.6},
+            {"motion_level": "<0.015", "weight": 1.0},  # Stricter motion for sleeping
         ],
-        "min_score": 0.7,  # نرفع الحد قليلاً لتقليل False Positives
+        "min_score": 0.75,
     },
     "idle": {
         "conditions": [
-            {"sitting": True, "weight": 0.5},
-            {"motion_level": "<0.08", "weight": 0.6},
+            {"sitting": True, "weight": 0.6},
+            {"motion_level": "<0.05", "weight": 0.5},
         ],
-        "min_score": 0.4,  # خفضنا الحد
+        "min_score": 0.45,
     },
     "meeting": {
         "conditions": [
-            {"sitting": True, "weight": 0.4},
-            {"motion_level": "0.05-0.4", "weight": 0.4},
-            {"hands_forward": True, "weight": 0.3},
+            {"sitting": True, "weight": 0.3},
+            {"motion_level": "0.05-0.3", "weight": 0.3},
+            {"hands_forward": True, "weight": 0.2},
         ],
-        "min_score": 0.5,
+        "min_score": 1.5,  # Increased to effectively disable unless specifically tuned later
     },
     "away": {
         "conditions": [
