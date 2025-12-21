@@ -31,7 +31,26 @@ logger = logging.getLogger("web_app")
 
 def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
-    app.secret_key = "change-me"  # يجب استبداله في الإنتاج
+    
+    # إعدادات الأمان المحسّنة
+    try:
+        from config.security_config import (
+            get_secret_key, 
+            SESSION_COOKIE_SECURE,
+            SESSION_COOKIE_HTTPONLY,
+            SESSION_COOKIE_SAMESITE,
+            PERMANENT_SESSION_LIFETIME
+        )
+        app.secret_key = get_secret_key()
+        app.config['SESSION_COOKIE_SECURE'] = SESSION_COOKIE_SECURE
+        app.config['SESSION_COOKIE_HTTPONLY'] = SESSION_COOKIE_HTTPONLY
+        app.config['SESSION_COOKIE_SAMESITE'] = SESSION_COOKIE_SAMESITE
+        app.config['PERMANENT_SESSION_LIFETIME'] = PERMANENT_SESSION_LIFETIME
+        logger.info("✓ تم تحميل إعدادات الأمان المحسّنة")
+    except ImportError:
+        import secrets
+        app.secret_key = secrets.token_hex(32)
+        logger.warning("⚠️ استخدام مفتاح مؤقت - أنشئ config/security_config.py للإنتاج")
 
     # مكونات مشتركة
     runner = MultiCameraRunner(config_path)
@@ -109,7 +128,9 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                 "device": request.form.get("device", "cpu"),
                 "location": request.form.get("location", "").strip(),
                 "priority": int(request.form.get("priority", 2)),
-                "fps": int(request.form.get("fps", 25))
+                "fps": int(request.form.get("fps", 25)),
+                "imgsz": int(request.form.get("imgsz", 640)),
+                "conf": float(request.form.get("conf", 0.5))
             }
             
             # تحويل المصدر إلى رقم إذا كان رقماً
@@ -170,6 +191,8 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             camera["location"] = request.form.get("location", "").strip()
             camera["priority"] = int(request.form.get("priority", 2))
             camera["fps"] = int(request.form.get("fps", 25))
+            camera["imgsz"] = int(request.form.get("imgsz", 640))
+            camera["conf"] = float(request.form.get("conf", 0.5))
             
             # تحويل المصدر إلى رقم إذا كان رقماً
             try:
@@ -207,8 +230,8 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             # إيقاف الكاميرا أولاً إذا كانت تعمل
             try:
                 runner.stop_camera(camera_id)
-            except:
-                pass
+            except Exception as stop_err:
+                logger.warning(f"تعذر إيقاف الكاميرا {camera_id}: {stop_err}")
             
             # حذف الكاميرا
             original_count = len(config.get("cameras", []))
@@ -387,10 +410,26 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     @login_required(role="admin")
     def settings_update():
         try:
-            data = json.loads(request.form.get("config_json", "{}"))
+            new_data = json.loads(request.form.get("config_json", "{}"))
+            
+            # قراءة التكوين الحالي للحفاظ على الكاميرات
+            config_path = Path("config/cameras_config.json")
+            current_config = {}
+            if config_path.exists():
+                current_config = json.loads(config_path.read_text(encoding="utf-8"))
+            
+            # تحديث الإعدادات العامة فقط
+            if 'global_settings' in new_data:
+                current_config['global_settings'] = new_data['global_settings']
+            
+            # حفظ التكوين المدمج
             Path("config").mkdir(parents=True, exist_ok=True)
-            Path("config/cameras_config.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            flash("تم حفظ الإعدادات", "success")
+            config_path.write_text(json.dumps(current_config, ensure_ascii=False, indent=2), encoding="utf-8")
+            
+            # تحديث التكوين في الـ runner
+            runner.config = current_config
+            
+            flash("تم حفظ الإعدادات بنجاح", "success")
         except Exception as e:
             flash(f"فشل حفظ الإعدادات: {e}", "danger")
         return redirect(url_for("settings_page"))
@@ -486,26 +525,27 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             
             logger.info(f"✓ الفيديو صحيح: {video_info['duration_sec']:.1f}s, {video_info['resolution']}")
             
-            # قراءة الإعدادات - محسنة للسرعة
-            confidence = float(request.form.get('confidence', 0.35))
-            frame_skip = int(request.form.get('frame_skip', 3))  # 3 = كل ثالث إطار للسرعة
-            max_duration = int(request.form.get('max_duration', 30))  # حد أقصى 30 ثانية للاختبار
-            imgsz = int(request.form.get('imgsz', 320))  # 320 = أسرع
+            # قراءة الإعدادات - Phase 10: محسنة للسرعة القصوى
+            confidence = float(request.form.get('confidence', 0.45))
+            frame_skip = int(request.form.get('frame_skip', 8))  # Phase 10: تخطي 8 إطارات للسرعة
+            max_duration = int(request.form.get('max_duration', 30))
+            imgsz = int(request.form.get('imgsz', 480))  # Phase 10: 480p للسرعة
             # تفعيل التعرف على الوجوه والأنشطة للدقة الكاملة
             enable_face = True
             enable_activity = True
             
             # تهيئة معالج المستوى الثاني مع الذكاء الاصطناعي المتقدم
+            # Phase 10: السرعة القصوى والدقة الكاملة
             logger.info("تهيئة Level2VideoProcessor مع الذكاء الاصطناعي المتقدم...")
             processor = Level2VideoProcessor(
                 device="cpu",
-                imgsz=416,  # حجم متوازن
-                conf_threshold=0.35,  # العتبة المحسنة
+                imgsz=480,            # Phase 10: 480p للسرعة القصوى
+                conf_threshold=0.45,  # عتبة صارمة لتقليل المعرفات الوهمية
                 enable_face_recognition=enable_face,
                 enable_activity_recognition=enable_activity,
-                enable_advanced_ai=True,  # تفعيل الذكاء الاصطناعي المتقدم
-                yolo_model="s",  # small للتوازن بين السرعة والدقة
-                activity_window=15  # نافذة تنعيم محسنة
+                enable_advanced_ai=True,
+                yolo_model="s",
+                activity_window=15
             )
             logger.info("تم تهيئة معالج المستوى الثاني بنجاح")
             
@@ -608,4 +648,4 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5050, debug=True)

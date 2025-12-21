@@ -53,7 +53,7 @@ class Level2VideoProcessor(SmartVideoProcessor):
         self,
         device: str = "cpu",
         imgsz: int = 416,
-        conf_threshold: float = 0.35,
+        conf_threshold: float = 0.45,  # رفع العتبة لتقليل الكشوفات الضعيفة من البداية
         enable_face_recognition: bool = True,
         enable_activity_recognition: bool = True,
         enable_advanced_ai: bool = True,
@@ -177,13 +177,18 @@ class Level2VideoProcessor(SmartVideoProcessor):
                 
                 # نسخة للمعالجة
                 processing_frame = frame.copy()
+                original_frame = frame.copy()  # Phase 10: حفظ الإطار الأصلي للـ snapshots عالية الجودة
                 
-                # تصغير للمعالجة إذا لزم الأمر
-                if frame.shape[1] > 720:
-                    scale = 720 / frame.shape[1]
+                # تصغير للمعالجة (Phase 10: 480p للسرعة القصوى)
+                if frame.shape[1] > 480:
+                    scale = 480 / frame.shape[1]
                     new_width = int(frame.shape[1] * scale)
                     new_height = int(frame.shape[0] * scale)
                     processing_frame = cv2.resize(frame, (new_width, new_height))
+                    
+                # حساب عامل التحجيم لتحويل الإحداثيات لاحقاً
+                scale_x = original_frame.shape[1] / processing_frame.shape[1]
+                scale_y = original_frame.shape[0] / processing_frame.shape[0]
                 
                 # كشف الأشخاص
                 if self.person_detector:
@@ -209,12 +214,24 @@ class Level2VideoProcessor(SmartVideoProcessor):
                                 'risk_level': 'low',
                                 'anomaly_detected': False,
                                 'predicted_activity': 'unknown',
-                                'ai_analysis': {}
+                                'ai_analysis': {},
+                                'best_snapshot_score': -1.0,  # جودة أفضل لقطة
+                                'has_face': False,            # هل تم رصد وجه؟
+                                'face_embedding': None,       # بصمة الوجه للدمج
+                                'face_crop': None,            # صورة الوجه فقط
+                                'last_position': None,        # Phase 10: آخر موقع معروف للدمج المكاني
+                                'positions_history': []       # Phase 10: سجل المواقع
                             }
                         person_info = person_data[track_id]
                         person_info['last_seen'] = current_time
                         person_info['total_confidence'] += conf
                         person_info['detection_count'] += 1
+                        
+                        # Phase 10: تتبع الموقع للدمج المكاني
+                        center_x = (x1 + x2) // 2
+                        center_y = (y1 + y2) // 2
+                        person_info['last_position'] = (center_x, center_y)
+                        person_info['positions_history'].append((center_x, center_y, current_time))
                         
                         
                         # التعرف على الوجه
@@ -229,7 +246,20 @@ class Level2VideoProcessor(SmartVideoProcessor):
                                             matches = self.face_recognizer.recognize_face(best_face['embedding'])
                                             if matches and matches[0]['similarity'] > 0.6:
                                                 person_info['name'] = matches[0]['name']
+                                                person_info['has_face'] = True
+                                                person_info['face_embedding'] = best_face['embedding']
+                                                
+                                                # قص الوجه لـ snapshot أفضل (Phase 9)
+                                                fx1, fy1, fx2, fy2 = best_face['box']
+                                                person_info['face_crop'] = person_crop[fy1:fy2, fx1:fx2].copy()
+                                                
                                                 logger.info(f"✓ تم التعرف على الشخص {track_id}: {matches[0]['name']}")
+                                            else:
+                                                # حتى لو مجهول، نحفظ الملامح للدمج (Phase 9)
+                                                person_info['has_face'] = True
+                                                person_info['face_embedding'] = best_face['embedding']
+                                                fx1, fy1, fx2, fy2 = best_face['box']
+                                                person_info['face_crop'] = person_crop[fy1:fy2, fx1:fx2].copy()
                             except Exception as e:
                                 if processed_frames % 100 == 0:
                                     logger.debug(f"خطأ في التعرف على الوجه: {e}")
@@ -280,8 +310,8 @@ class Level2VideoProcessor(SmartVideoProcessor):
                             'timestamp': current_time
                         })
                         
-                        # التحليل المتقدم بالذكاء الاصطناعي
-                        if self.behavior_ai and processed_frames % 10 == 0:  # كل 10 إطارات
+                        # التحليل المتقدم بالذكاء الاصطناعي (Phase 10: كل 30 إطاراً للسرعة القصوى)
+                        if self.behavior_ai and processed_frames % 30 == 0:
                             try:
                                 # إعداد بيانات الشخص للتحليل
                                 analysis_data = self._prepare_person_data_for_ai(
@@ -327,17 +357,42 @@ class Level2VideoProcessor(SmartVideoProcessor):
                             frame, x1, y1, x2, y2, person_info, activity, activity_conf
                         )
                         
-                        # حفظ snapshot بنفس طريقة المستوى الأول (بسيط ومباشر)
-                        if person_info.get('snapshot') is None:
+                        # حفظ snapshot محسنة (Phase 10: HD من الإطار الأصلي)
+                        # المعايير: وجود وجه + مساحة الوجه
+                        face_bonus = 500000 if person_info.get('has_face') else 0
+                        current_score = face_bonus + (x2 - x1) * (y2 - y1)
+                        
+                        if current_score > person_info.get('best_snapshot_score', -1.0):
                             try:
-                                person_crop = processing_frame[y1:y2, x1:x2]
-                                if person_crop.size > 0:
+                                # Phase 10: القص من الإطار الأصلي عالي الجودة
+                                # تحويل الإحداثيات إلى الإطار الأصلي
+                                orig_x1 = int(x1 * scale_x)
+                                orig_y1 = int(y1 * scale_y)
+                                orig_x2 = int(x2 * scale_x)
+                                orig_y2 = int(y2 * scale_y)
+                                
+                                snapshot_img = None
+                                if person_info.get('face_crop') is not None:
+                                    # استخدام لقطة الوجه من الذاكرة (إذا متاحة)
+                                    snapshot_img = person_info['face_crop']
+                                else:
+                                    # قص من الإطار الأصلي HD
+                                    snapshot_img = original_frame[orig_y1:orig_y2, orig_x1:orig_x2]
+
+                                if snapshot_img is not None and snapshot_img.size > 0:
+                                    if person_info.get('snapshot'):
+                                        try:
+                                            old_path = Path("web_app/static") / person_info['snapshot']
+                                            if old_path.exists(): old_path.unlink()
+                                        except: pass
+
                                     timestamp = int(time.time())
                                     snapshot_name = f"person_{track_id}_{timestamp}.jpg"
                                     snapshot_path = snapshots_dir / snapshot_name
-                                    cv2.imwrite(str(snapshot_path), person_crop)
+                                    cv2.imwrite(str(snapshot_path), snapshot_img)
                                     person_info['snapshot'] = f"uploads/test_videos/snapshots/{snapshot_name}"
-                                    logger.info(f"✓ تم حفظ صورة الشخص {track_id}: {snapshot_name}")
+                                    person_info['best_snapshot_score'] = current_score
+                                    logger.debug(f"✓ تحديث صورة HD للشخص {track_id}")
                             except Exception as e:
                                 logger.debug(f"فشل حفظ صورة الشخص {track_id}: {e}")
                 
@@ -370,10 +425,93 @@ class Level2VideoProcessor(SmartVideoProcessor):
             except Exception as e:
                 logger.error(f"خطأ في تحديث النماذج: {e}")
         
-        # إنشاء الإحصائيات النهائية
+        # فلترة المسارات "القصيرة" بشكل أكثر صرامة (Phase 9: 3 ثوانٍ)
+        min_seconds = 3.0
+        min_detections = int(min_seconds * (fps / frame_skip))
+        
+        filtered_person_data = {}
+        for tid, info in person_data.items():
+            avg_conf = info['total_confidence'] / max(info['detection_count'], 1)
+            # استبعاد القصير جداً أو الثقة المنخفضة
+            if info['detection_count'] >= min_detections and avg_conf > 0.4:
+                filtered_person_data[tid] = info
+        
+        # فلترة المسارات المتقدمة: من {len(person_data)} إلى {len(filtered_person_data)} شخص
+        
+        # --- منطق دمج المسارات المتقدم (Phase 8b) ---
+        final_merged_data = {}
+        sorted_tids = sorted(filtered_person_data.keys(), key=lambda x: filtered_person_data[x]['first_seen'])
+        merged_ids = set()
+
+        for i, tid_a in enumerate(sorted_tids):
+            if tid_a in merged_ids:
+                continue
+            
+            current_main = filtered_person_data[tid_a]
+            final_merged_data[tid_a] = current_main
+            
+            # محاولة البحث عن مسارات لاحقة لدمجها
+            for j in range(i + 1, len(sorted_tids)):
+                tid_b = sorted_tids[j]
+                if tid_b in merged_ids:
+                    continue
+                
+                track_b = filtered_person_data[tid_b]
+                
+                # فجوة زمنية (بالثواني)
+                time_gap = track_b['first_seen'] - current_main['last_seen']
+                
+                # Phase 10: دمج مكاني-زماني بدلاً من زماني فقط
+                if 0 <= time_gap <= 8.0:
+                    can_merge = False
+                    
+                    # 1. الدمج بالملامح / بصمة الوجه (أقوى وسيلة، عتبة صارمة)
+                    if current_main.get('face_embedding') is not None and track_b.get('face_embedding') is not None:
+                        sim = self.face_recognizer.calculate_similarity(current_main['face_embedding'], track_b['face_embedding'])
+                        if sim > 0.75:  # Phase 10: عتبة أعلى لدقة أكبر
+                            can_merge = True
+                            logger.info(f"🧬 دمج بالبصمة الحيوية: {tid_b} -> {tid_a} (similarity: {sim:.2f})")
+                    
+                    # 2. الدمج المكاني-الزماني (Phase 10: فحص المسافة المكانية)
+                    if not can_merge and time_gap < 5.0:
+                        # فحص المسافة المكانية بين آخر موقع لـ A وأول موقع لـ B
+                        if current_main.get('last_position') and track_b.get('positions_history'):
+                            last_pos_a = current_main['last_position']
+                            first_pos_b = track_b['positions_history'][0][:2] if track_b['positions_history'] else None
+                            
+                            if first_pos_b:
+                                # حساب المسافة الإقليدية
+                                distance = ((last_pos_a[0] - first_pos_b[0])**2 + (last_pos_a[1] - first_pos_b[1])**2)**0.5
+                                # إذا كانت المسافة < 100 بكسل (قريب جداً)
+                                if distance < 100:
+                                    can_merge = True
+                                    logger.info(f"📍 دمج مكاني-زماني: {tid_b} -> {tid_a} (dist: {distance:.1f}px, gap: {time_gap:.1f}s)")
+                        
+                    if can_merge:
+                        # تنفيذ الدمج
+                        current_main['last_seen'] = max(current_main['last_seen'], track_b['last_seen'])
+                        current_main['detection_count'] += track_b['detection_count']
+                        current_main['total_confidence'] += track_b['total_confidence']
+                        
+                        # دمج الأنشطة
+                        for act, sessions in track_b['activities'].items():
+                            current_main['activities'][act].extend(sessions)
+                        
+                        # تحديث أفضل لقطة إذا كان B أفضل
+                        if track_b.get('best_snapshot_score', -1) > current_main.get('best_snapshot_score', -1):
+                            current_main['snapshot'] = track_b['snapshot']
+                            current_main['best_snapshot_score'] = track_b['best_snapshot_score']
+                            current_main['has_face'] = current_main['has_face'] or track_b['has_face']
+                        
+                        merged_ids.add(tid_b)
+                        logger.info(f"🔗 تم دمج المسار {tid_b} في {tid_a} (ميزة الربط الزمني)")
+
+        logger.info(f"بعد الدمج المتقدم: {len(final_merged_data)} شخص")
+        
+        # إنشاء الإحصائيات النهائية من البيانات المدمجة
         processing_time = time.time() - start_time
         statistics = self._generate_enhanced_statistics(
-            person_data, processing_time, processed_frames, fps, frame_analyses
+            final_merged_data, processing_time, processed_frames, fps, frame_skip, frame_analyses
         )
         
         logger.info(f"✅ تم الانتهاء من معالجة الفيديو في {processing_time:.2f} ثانية")
@@ -484,7 +622,7 @@ class Level2VideoProcessor(SmartVideoProcessor):
                                 font_scale=0.5, color=(255, 255, 255))
     
     def _generate_enhanced_statistics(self, person_data: Dict, processing_time: float, 
-                                    processed_frames: int, fps: int, 
+                                    processed_frames: int, fps: int, frame_skip: int,
                                     frame_analyses: List) -> Dict[str, Any]:
         """إنشاء إحصائيات محسنة"""
         
@@ -496,18 +634,19 @@ class Level2VideoProcessor(SmartVideoProcessor):
             
             # التعامل مع الأنشطة سواء كانت قائمة أو defaultdict
             activity_data = person_info.get('activities', {})
-            if isinstance(activity_data, defaultdict) or isinstance(activity_data, dict):
+            if isinstance(activity_data, (dict, defaultdict)):
                 # إذا كانت defaultdict من القوائم، نحسب المدة لكل نشاط
                 for activity_name, activity_list in activity_data.items():
                     if isinstance(activity_list, list):
-                        activities[activity_name] = len(activity_list) / fps
+                        # حساب المدة: عدد الإطارات × معدل التخطي / عدد الإطارات في الثانية
+                        activities[activity_name] = (len(activity_list) * frame_skip) / fps
                     else:
                         activities[activity_name] = float(activity_list)
             elif isinstance(activity_data, list):
                 # إذا كانت قائمة من السجلات
                 for activity_record in activity_data:
                     if isinstance(activity_record, dict):
-                        activities[activity_record.get('activity', 'idle')] += 1.0 / fps
+                        activities[activity_record.get('activity', 'idle')] += (1.0 * frame_skip) / fps
             
             # النشاط الأكثر شيوعاً
             top_activity = max(activities.keys(), key=lambda k: activities[k]) if activities else 'idle'
@@ -530,6 +669,10 @@ class Level2VideoProcessor(SmartVideoProcessor):
                 'sleeping_duration': float(activities.get('sleeping', 0)),
                 'idle_duration': float(activities.get('idle', 0)),
                 'phone_duration': float(activities.get('on_phone', 0)),
+                'meeting_duration': float(activities.get('meeting', 0)),
+                'walking_duration': float(activities.get('walking', 0)),
+                'standing_duration': float(activities.get('standing', 0)),
+                'all_activities': dict(activities),  # إدراج جميع الأنشطة
                 'top_activity': str(top_activity),
                 'avg_confidence': float(avg_confidence),
                 'count': int(person_info['detection_count']),

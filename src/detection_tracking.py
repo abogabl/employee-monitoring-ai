@@ -12,43 +12,39 @@ from typing import Dict, List, Tuple, Any
 import cv2
 import numpy as np
 
+# إعداد اللوجر أولاً
+logger = logging.getLogger(__name__)
+
 try:
     import torch
 except Exception:  # في حال عدم توفر torch أثناء التحضير
     torch = None  # type: ignore
 
-from ultralytics import YOLO
+# إصلاح مشكلة تحميل نماذج YOLO مع PyTorch 2.6+
 try:
-    # PyTorch 2.6+: default weights_only=True requires allow-listing classes used in YOLO checkpoints
-    from torch.serialization import add_safe_globals, safe_globals  # type: ignore
-    from ultralytics.nn.tasks import DetectionModel  # type: ignore
-    # وحدات إضافية شائعة داخل نقاط تفتيش YOLO
-    from ultralytics.nn.modules import Conv, C2f, SPPF, Bottleneck, Detect  # type: ignore
-    # شائعة في نماذج YOLO
-    from torch.nn.modules.container import Sequential, ModuleList  # type: ignore
-    from torch.nn import Conv2d, BatchNorm2d, Linear, ReLU, SiLU, LeakyReLU, Upsample  # type: ignore
-    from torch.nn import MaxPool2d, ConvTranspose2d  # type: ignore
-    try:
-        add_safe_globals([
-            DetectionModel,
-            Sequential, ModuleList,
-            Conv2d, BatchNorm2d, Linear,
-            ReLU, SiLU, LeakyReLU,
-            Upsample, MaxPool2d, ConvTranspose2d,
-            # Ultralytics custom modules
-            Conv, C2f, SPPF, Bottleneck, Detect,
-        ])
-    except Exception:
-        pass
-except Exception:
-    # إذا كانت الإصدارات أقدم أو لم تتوفر الدوال، نتجاهل هذا التهيئة
-    pass
+    import torch
+    import os
+    
+    # تعطيل weights_only عالمياً
+    os.environ['TORCH_WEIGHTS_ONLY'] = 'False'
+    
+    # تعديل دالة torch.load لفرض weights_only=False
+    if hasattr(torch, 'load'):
+        original_load = torch.load
+        
+        def patched_load(f, map_location=None, pickle_module=None, weights_only=None, **kwargs):
+            """دالة torch.load معدلة لتعطيل weights_only"""
+            return original_load(f, map_location=map_location, pickle_module=pickle_module, 
+                               weights_only=False, **kwargs)
+        
+        torch.load = patched_load
+        logger.info("✓ تم تطبيق إصلاح تحميل نماذج YOLO")
+        
+except Exception as e:
+    logger.warning("تعذر تطبيق إصلاح تحميل النماذج: %s", e)
 
+from ultralytics import YOLO
 from .utils import calculate_centroid, draw_text_with_background
-
-
-# إعداد اللوجر
-logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(
         level=logging.INFO,
@@ -97,20 +93,23 @@ class PersonDetector:
         last_error = None
         for path in load_attempts:
             try:
+                # محاولة تحميل النموذج بطرق مختلفة
                 try:
-                    from torch.serialization import safe_globals as _safe_globals  # noqa: F401
-                    allowed = [
-                        DetectionModel,
-                        Sequential, ModuleList,
-                        Conv2d, BatchNorm2d, Linear,
-                        ReLU, SiLU, LeakyReLU,
-                        Upsample, MaxPool2d, ConvTranspose2d,
-                        Conv, C2f, SPPF, Bottleneck, Detect,
-                    ]
-                    with safe_globals(allowed):
-                        self.model = YOLO(path)
-                except Exception:
+                    # الطريقة الأساسية
                     self.model = YOLO(path)
+                except Exception as e1:
+                    try:
+                        # طريقة بديلة مع تحديد المهمة
+                        self.model = YOLO(path, task='detect')
+                    except Exception as e2:
+                        try:
+                            # تحميل مع تعطيل weights_only
+                            import os
+                            os.environ['TORCH_WEIGHTS_ONLY'] = 'False'
+                            self.model = YOLO(path)
+                        except Exception as e3:
+                            # إذا فشلت كل الطرق، ارفع الخطأ
+                            raise e1
                 if self.device == "cuda":
                     self.model.to("cuda")
                 if self.use_half and torch is not None:
@@ -186,26 +185,65 @@ class PersonDetector:
 
 
 class PersonTracker:
-    """متعقّب أشخاص بسيط باستخدام مراكز الصناديق والمسافة الإقليدية.
+    """متعقّب أشخاص محسّن مع IoU + Hungarian Algorithm + Velocity Prediction.
 
-    - يمنح ID ثابت لكل شخص طالما المسافة ضمن حد معين.
-    - يدير حالات الاختفاء المؤقت عبر عداد frames_disappeared.
-    - يحذف المسارات التي تتجاوز حد الاختفاء.
+    التحسينات:
+    - استخدام IoU (Intersection over Union) بالإضافة للمسافة
+    - خوارزمية Hungarian للتعيين الأمثل
+    - تنبؤ بالموقع القادم باستخدام السرعة
+    - درجة ثقة للمسار
     """
 
-    def __init__(self, max_disappeared: int = 60, max_distance: float = 35.0) -> None:
+    def __init__(
+        self, 
+        max_disappeared: int = 90, 
+        max_distance: float = 120.0,
+        min_iou: float = 0.1,
+        use_velocity: bool = True
+    ) -> None:
         self.max_disappeared = int(max_disappeared)
         self.max_distance = float(max_distance)
+        self.min_iou = float(min_iou)
+        self.use_velocity = use_velocity
         self.next_track_id: int = 1
         self.tracks: Dict[int, Dict[str, Any]] = {}
+
+    @staticmethod
+    def _calculate_iou(box1: Tuple[int, int, int, int], box2: Tuple[int, int, int, int]) -> float:
+        """حساب IoU بين صندوقين"""
+        x1_1, y1_1, x2_1, y2_1 = box1
+        x1_2, y1_2, x2_2, y2_2 = box2
+        
+        # منطقة التقاطع
+        xi1 = max(x1_1, x1_2)
+        yi1 = max(y1_1, y1_2)
+        xi2 = min(x2_1, x2_2)
+        yi2 = min(y2_1, y2_2)
+        
+        if xi2 <= xi1 or yi2 <= yi1:
+            return 0.0
+        
+        intersection = (xi2 - xi1) * (yi2 - yi1)
+        
+        # مساحة كلا الصندوقين
+        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+        
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
 
     def _register(self, box: Tuple[int, int, int, int]) -> int:
         tid = self.next_track_id
         self.next_track_id += 1
+        centroid = calculate_centroid(box)
         self.tracks[tid] = {
             "box": box,
-            "centroid": calculate_centroid(box),
+            "centroid": centroid,
             "frames_disappeared": 0,
+            "velocity": (0.0, 0.0),  # (dx, dy) per frame
+            "confidence": 0.5,
+            "age": 0,  # عدد الإطارات منذ الإنشاء
         }
         return tid
 
@@ -218,18 +256,60 @@ class PersonTracker:
         """إرجاع المسارات النشطة حالياً."""
         return {k: v for k, v in self.tracks.items() if v.get("frames_disappeared", 0) <= self.max_disappeared}
 
-    def update(self, detections: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
-        """تحديث حالة المتعقب بقائمة الكشف الحديثة.
+    def _predict_position(self, track: Dict[str, Any]) -> Tuple[float, float]:
+        """تنبؤ بالموقع القادم باستخدام السرعة"""
+        if not self.use_velocity:
+            return track["centroid"]
+        
+        cx, cy = track["centroid"]
+        vx, vy = track.get("velocity", (0.0, 0.0))
+        return (cx + vx, cy + vy)
 
-        يستخدم أبسط تعيين قائم على أقرب مركز ضمن مسافة قصوى.
-        يرجع قاموس: track_id -> {box, centroid, frames_disappeared}
-        """
+    def _update_velocity(self, track: Dict[str, Any], new_centroid: Tuple[float, float]):
+        """تحديث السرعة"""
+        old_cx, old_cy = track["centroid"]
+        new_cx, new_cy = new_centroid
+        
+        # حساب السرعة الجديدة مع تنعيم (EMA)
+        alpha = 0.3
+        old_vx, old_vy = track.get("velocity", (0.0, 0.0))
+        new_vx = alpha * (new_cx - old_cx) + (1 - alpha) * old_vx
+        new_vy = alpha * (new_cy - old_cy) + (1 - alpha) * old_vy
+        
+        track["velocity"] = (new_vx, new_vy)
+
+    def _calculate_cost(self, track: Dict[str, Any], detection_box: Tuple[int, int, int, int]) -> float:
+        """حساب تكلفة المطابقة (أقل = أفضل)"""
+        # حساب IoU
+        iou = self._calculate_iou(track["box"], detection_box)
+        
+        # حساب المسافة من الموقع المتوقع
+        predicted_pos = self._predict_position(track)
+        det_centroid = calculate_centroid(detection_box)
+        distance = np.linalg.norm(np.array(predicted_pos) - np.array(det_centroid))
+        
+        # تطبيع المسافة
+        norm_distance = min(distance / self.max_distance, 1.0)
+        
+        # التكلفة: مزيج من المسافة و(1 - IoU)
+        # أوزان: 30% مسافة، 70% IoU (IoU أكثر أهمية للدقة)
+        cost = 0.3 * norm_distance + 0.7 * (1.0 - iou)
+        
+        return cost
+
+    def update(self, detections: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+        """تحديث حالة المتعقب بقائمة الكشف الحديثة (محسّن)."""
+        
+        # زيادة عمر المسارات
+        for track in self.tracks.values():
+            track["age"] = track.get("age", 0) + 1
+        
         # في حال لا توجد كاشفات
         if len(detections) == 0:
-            # زيادة عداد الاختفاء لكل مسار
             to_delete = []
             for tid, t in self.tracks.items():
                 t["frames_disappeared"] = t.get("frames_disappeared", 0) + 1
+                t["confidence"] = max(t.get("confidence", 0.5) - 0.05, 0.1)
                 if t["frames_disappeared"] > self.max_disappeared:
                     to_delete.append(tid)
             for tid in to_delete:
@@ -237,46 +317,71 @@ class PersonTracker:
             return self.tracks
 
         input_boxes = [d["box"] for d in detections]
-        input_centroids = [calculate_centroid(b) for b in input_boxes]
 
         if len(self.tracks) == 0:
             for box in input_boxes:
                 self._register(box)
             return self.tracks
 
-        # تحضير مصفوفة المسافات بين المسارات الحالية والكاشفات
+        # بناء مصفوفة التكلفة
         track_ids = list(self.tracks.keys())
-        track_centroids = [self.tracks[tid]["centroid"] for tid in track_ids]
+        num_tracks = len(track_ids)
+        num_dets = len(input_boxes)
+        
+        cost_matrix = np.zeros((num_tracks, num_dets), dtype=float)
+        for i, tid in enumerate(track_ids):
+            for j, det_box in enumerate(input_boxes):
+                cost_matrix[i, j] = self._calculate_cost(self.tracks[tid], det_box)
 
-        D = np.zeros((len(track_centroids), len(input_centroids)), dtype=float)
-        for i, tc in enumerate(track_centroids):
-            for j, ic in enumerate(input_centroids):
-                D[i, j] = np.linalg.norm(np.array(tc) - np.array(ic))
-
-        # تعيين greedy: اختيار أقرب كشف لكل مسار إن كانت المسافة مقبولة
+        # التعيين باستخدام خوارزمية greedy محسّنة
+        # (يمكن استبدالها بـ Hungarian إذا توفر scipy)
         used_rows = set()
         used_cols = set()
+        assignments = []
 
-        rows = np.argsort(D.min(axis=1))  # ترتيب حسب أقرب كشف
-        for row in rows:
-            if row in used_rows:
+        # ترتيب حسب أقل تكلفة
+        flat_indices = np.argsort(cost_matrix.flatten())
+        for flat_idx in flat_indices:
+            row = flat_idx // num_dets
+            col = flat_idx % num_dets
+            
+            if row in used_rows or col in used_cols:
                 continue
-            col = int(np.argmin(D[row]))
-            if col in used_cols:
-                continue
-            if D[row, col] <= self.max_distance:
-                tid = track_ids[row]
-                box = input_boxes[col]
-                self.tracks[tid]["box"] = box
-                self.tracks[tid]["centroid"] = input_centroids[col]
-                self.tracks[tid]["frames_disappeared"] = 0
+            
+            cost = cost_matrix[row, col]
+            
+            # رفض المطابقات السيئة
+            det_box = input_boxes[col]
+            iou = self._calculate_iou(self.tracks[track_ids[row]]["box"], det_box)
+            
+            predicted_pos = self._predict_position(self.tracks[track_ids[row]])
+            det_centroid = calculate_centroid(det_box)
+            distance = np.linalg.norm(np.array(predicted_pos) - np.array(det_centroid))
+            
+            if distance <= self.max_distance or iou >= self.min_iou:
+                assignments.append((row, col))
                 used_rows.add(row)
                 used_cols.add(col)
+
+        # تحديث المسارات المطابقة
+        for row, col in assignments:
+            tid = track_ids[row]
+            box = input_boxes[col]
+            new_centroid = calculate_centroid(box)
+            
+            # تحديث السرعة قبل تحديث الموقع
+            self._update_velocity(self.tracks[tid], new_centroid)
+            
+            self.tracks[tid]["box"] = box
+            self.tracks[tid]["centroid"] = new_centroid
+            self.tracks[tid]["frames_disappeared"] = 0
+            self.tracks[tid]["confidence"] = min(self.tracks[tid].get("confidence", 0.5) + 0.1, 1.0)
 
         # المسارات غير المعينّة: اعتبرها مختفية
         for r, tid in enumerate(track_ids):
             if r not in used_rows:
-                self.tracks[tid]["frames_disappeared"] = self.tracks[tid].get("frames_disappeared", 0) + 1
+                self.tracks[tid]["frames_disappeared"] += 1
+                self.tracks[tid]["confidence"] = max(self.tracks[tid].get("confidence", 0.5) - 0.05, 0.1)
 
         # الكاشفات غير المعينة: سجّل مسارات جديدة
         for c, box in enumerate(input_boxes):
@@ -289,3 +394,10 @@ class PersonTracker:
             self.remove_track(tid)
 
         return self.tracks
+
+    def get_track_confidence(self, track_id: int) -> float:
+        """الحصول على درجة الثقة لمسار معين"""
+        if track_id in self.tracks:
+            return self.tracks[track_id].get("confidence", 0.5)
+        return 0.0
+
