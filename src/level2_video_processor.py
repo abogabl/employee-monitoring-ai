@@ -58,7 +58,8 @@ class Level2VideoProcessor(SmartVideoProcessor):
         enable_activity_recognition: bool = True,
         enable_advanced_ai: bool = True,
         yolo_model: str = "s",
-        activity_window: int = 15
+        activity_window: int = 15,
+        random_seed: int = None
     ):
         # تهيئة المعالج الأساسي
         super().__init__(
@@ -70,6 +71,11 @@ class Level2VideoProcessor(SmartVideoProcessor):
             yolo_model=yolo_model,
             activity_window=activity_window
         )
+        
+        # تثبيت البذور العشوائية للاتساق
+        if random_seed is not None:
+            self._set_random_seeds(random_seed)
+            logger.info(f"✓ تم تثبيت البذور العشوائية: {random_seed}")
         
         # الذكاء الاصطناعي المتقدم
         self.enable_advanced_ai = enable_advanced_ai
@@ -525,9 +531,20 @@ class Level2VideoProcessor(SmartVideoProcessor):
         
         # حساب الأنشطة
         activities = defaultdict(float)
-        if person_info['activities']:
-            for activity_record in person_info['activities'][-20:]:  # آخر 20 نشاط
-                activities[activity_record['activity']] += 1
+        person_activities = person_info.get('activities', {})
+        
+        if isinstance(person_activities, dict):
+            # إذا كانت defaultdict من القوائم
+            for activity_name, activity_list in person_activities.items():
+                if isinstance(activity_list, list):
+                    activities[activity_name] = len(activity_list[-20:])  # آخر 20 نشاط
+                else:
+                    activities[activity_name] = float(activity_list)
+        elif isinstance(person_activities, list) and person_activities:
+            # إذا كانت قائمة من السجلات
+            for activity_record in person_activities[-20:]:  # آخر 20 نشاط
+                if isinstance(activity_record, dict):
+                    activities[activity_record.get('activity', 'idle')] += 1
         
         # حساب المواقع
         center_x = (x1 + x2) / 2 / frame_shape[1]
@@ -542,12 +559,29 @@ class Level2VideoProcessor(SmartVideoProcessor):
             'avg_confidence': person_info['total_confidence'] / max(person_info['detection_count'], 1),
             'avg_motion': motion_level,
             'motion_variance': motion_level * 0.1,  # تقدير
-            'position_changes': len(person_info['activities']),
+            'position_changes': len(person_activities) if isinstance(person_activities, (dict, list)) else 0,
             'avg_x_position': center_x,
             'avg_y_position': center_y,
             'position_stability': 1.0 - motion_level,
-            'current_activity': person_info['activities'][-1]['activity'] if person_info['activities'] else 'idle'
+            'current_activity': self._get_current_activity(person_activities)
         }
+    
+    def _get_current_activity(self, person_activities):
+        """الحصول على النشاط الحالي للشخص"""
+        if isinstance(person_activities, dict):
+            # إذا كانت defaultdict من القوائم، أخذ آخر نشاط
+            for activity_name, activity_list in person_activities.items():
+                if isinstance(activity_list, list) and activity_list:
+                    return activity_name
+            return 'idle'
+        elif isinstance(person_activities, list) and person_activities:
+            # إذا كانت قائمة من السجلات
+            last_activity = person_activities[-1]
+            if isinstance(last_activity, dict):
+                return last_activity.get('activity', 'idle')
+            return 'idle'
+        else:
+            return 'idle'
     
     def _draw_enhanced_person_info(self, frame: np.ndarray, x1: int, y1: int, x2: int, y2: int,
                                  person_info: Dict, activity: str, confidence: float):
@@ -762,3 +796,29 @@ class Level2VideoProcessor(SmartVideoProcessor):
             recommendations.append("النظام يعمل بشكل طبيعي - لا توجد مشاكل مكتشفة")
         
         return recommendations
+    
+    def _set_random_seeds(self, seed: int):
+        """تثبيت البذور العشوائية لضمان نتائج متسقة"""
+        import random
+        import numpy as np
+        import torch
+        import os
+        
+        # Python random
+        random.seed(seed)
+        
+        # NumPy random
+        np.random.seed(seed)
+        
+        # PyTorch random
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+        
+        # للحصول على نتائج متسقة تماماً
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        
+        # متغير البيئة
+        os.environ['PYTHONHASHSEED'] = str(seed)

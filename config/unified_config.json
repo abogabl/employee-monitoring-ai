@@ -1,0 +1,67 @@
+{
+  "system": {
+    "random_seed": 42,
+    "deterministic_mode": true,
+    "testing_mode": true,
+    "consistency_version": "1.0"
+  },
+  "yolo": {
+    "model": "yolov8s.pt",
+    "imgsz": 416,
+    "confidence": 0.7,
+    "iou": 0.3,
+    "device": "cpu",
+    "max_det": 20,
+    "agnostic_nms": false,
+    "classes": [0],
+    "verbose": false
+  },
+  "level2_processor": {
+    "frame_skip": 5,
+    "activity_window": 15,
+    "enable_advanced_ai": true,
+    "enable_face_recognition": true,
+    "enable_activity_recognition": true,
+    "conf_threshold": 0.7,
+    "yolo_model": "s",
+    "random_seed": 42
+  },
+  "tracking": {
+    "type": "bytetrack",
+    "track_high_thresh": 0.9,
+    "track_low_thresh": 0.5,
+    "new_track_thresh": 0.95,
+    "max_age": 5,
+    "match_thresh": 0.98
+  },
+  "ai_thresholds": {
+    "anomaly_threshold": 0.7,
+    "risk_threshold": 0.6,
+    "prediction_confidence": 0.5,
+    "face_similarity": 0.6
+  },
+  "performance": {
+    "max_duration": 300,
+    "enable_progress_tracking": true,
+    "log_level": "INFO",
+    "save_snapshots": true,
+    "snapshot_quality": 95
+  },
+  "consistency_settings": {
+    "sort_detections": true,
+    "sort_by": ["confidence", "x1", "y1"],
+    "round_precision": 6,
+    "fixed_timestamps": false,
+    "deterministic_processing": true
+  },
+  "smart_tracking": {
+    "enabled": true,
+    "max_persons": 15,
+    "similarity_threshold": 0.7,
+    "max_lost_time": 30.0,
+    "min_detections_for_id": 5,
+    "feature_update_rate": 0.1,
+    "iou_threshold": 0.7,
+    "min_confidence": 0.3
+  }
+}
