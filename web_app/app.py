@@ -572,7 +572,7 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             
             # قراءة الإعدادات - Phase 10: محسنة للسرعة القصوى
             confidence = float(request.form.get('confidence', 0.45))
-            frame_skip = int(request.form.get('frame_skip', 8))  # Phase 10: تخطي 8 إطارات للسرعة
+            frame_skip = int(request.form.get('frame_skip', 8))  # frame_skip=8 worked with ByteTrack
             max_duration = int(request.form.get('max_duration', 30))
             imgsz = int(request.form.get('imgsz', 480))  # Phase 10: 480p للسرعة
             # تفعيل التعرف على الوجوه والأنشطة للدقة الكاملة
