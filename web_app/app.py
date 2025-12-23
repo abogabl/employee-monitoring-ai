@@ -66,7 +66,17 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     # Stub replacements
     class StubRunner:
         cameras = {}
+        config = {
+            "cameras": [],
+            "global_settings": {
+                "enable_face_recognition": False,
+                "enable_activity_recognition": False,
+                "confidence_threshold": 0.5,
+                "frame_skip": 3
+            }
+        }
         def get_all_status(self): return {}
+        def load_config(self): return self.config
     
     class StubAttendance:
         def get_daily_attendance(self, date): return []
@@ -74,6 +84,11 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     
     class StubEmployees:
         def list_employees(self): return []
+        def list_all_employees(self): return []
+        def get_employee(self, eid): return None
+        def add_employee(self, data): return True
+        def update_employee(self, eid, data): return True
+        def delete_employee(self, eid): return True
     
     runner = StubRunner()
     attendance = StubAttendance()
@@ -541,13 +556,13 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     @app.post("/test-video/process")
     @login_required
     def test_video_process():
-        """معالجة فيديو الاختبار - Fresh Start Simple Version"""
+        """معالجة فيديو الاختبار - Phase 2: BoT-SORT Tracking"""
         import time as time_module
-        from src.video_processor import SimpleVideoProcessor
+        from src.enhanced_processor import EnhancedVideoProcessor
         import cv2
         
         try:
-            logger.info("=== بدء معالجة فيديو جديد (Simple Processor) ===")
+            logger.info("=== بدء معالجة فيديو (BoT-SORT Enhanced) ===")
             
             if 'video' not in request.files:
                 logger.error("لم يتم العثور على ملف فيديو في الطلب")
@@ -571,7 +586,7 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             video_file.save(input_path)
             logger.info(f"تم حفظ الفيديو: {input_path}")
             
-            # التحقق البسيط من الفيديو
+            # التحقق من الفيديو
             cap = cv2.VideoCapture(str(input_path))
             if not cap.isOpened():
                 input_path.unlink()
@@ -582,35 +597,35 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             duration = total_frames / fps
             cap.release()
             
-            logger.info(f"✓ الفيديو صحيح: {duration:.1f}s, {total_frames} frames")
+            logger.info(f"✓ الفيديو: {duration:.1f}s, {total_frames} frames")
             
             # قراءة الإعدادات
             confidence = float(request.form.get('confidence', 0.5))
-            frame_skip = int(request.form.get('frame_skip', 3))
+            frame_skip = int(request.form.get('frame_skip', 1))  # BoT-SORT يعمل أفضل مع frame_skip=1
             max_duration = int(request.form.get('max_duration', 60))
             
-            # تهيئة المعالج البسيط
-            logger.info("تهيئة SimpleVideoProcessor...")
-            processor = SimpleVideoProcessor(
+            # تهيئة المعالج المحسن مع BoT-SORT
+            logger.info(f"تهيئة EnhancedVideoProcessor (BoT-SORT, frame_skip={frame_skip})...")
+            processor = EnhancedVideoProcessor(
                 model_path="yolov8n.pt",
                 conf_threshold=confidence,
+                tracker_type="botsort",
                 frame_skip=frame_skip
             )
             
             # معالجة الفيديو
-            logger.info(f"بدء المعالجة: frame_skip={frame_skip}, confidence={confidence}")
+            logger.info("بدء المعالجة...")
             results = processor.process_video(
                 input_path=str(input_path),
                 output_path=str(output_path),
                 max_duration=max_duration
             )
             
-            logger.info("انتهت المعالجة بنجاح")
+            logger.info(f"✅ انتهت المعالجة: {results.get('total_persons', 0)} أشخاص")
             
             # حذف الملف الأصلي
             try:
                 input_path.unlink()
-                logger.info("تم حذف الملف المؤقت")
             except Exception as e:
                 logger.warning(f"فشل حذف الملف المؤقت: {e}")
             
