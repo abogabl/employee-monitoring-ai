@@ -67,22 +67,12 @@
         </li>
         {% endif %}
         
-        <!-- التعلم الذاتي - manager وأعلى -->
+        <!-- Phase 11: تقرير الأنشطة - manager وأعلى -->
         {% if session.get('role') in ['manager', 'admin'] %}
         <li class="nav-item">
-          <a class="nav-link px-3 {{ 'active' if 'self_learning' in request.endpoint else '' }}" href="{{ url_for('self_learning.dashboard') }}">
-            <i class="bi bi-brain"></i>
-            <span class="nav-text">التعلم الذاتي</span>
-          </a>
-        </li>
-        {% endif %}
-        
-        <!-- المراقبة والتتبع - admin فقط -->
-        {% if session.get('role') == 'admin' %}
-        <li class="nav-item">
-          <a class="nav-link px-3 {{ 'active' if request.endpoint == 'monitoring_page' else '' }}" href="{{ url_for('monitoring_page') }}">
-            <i class="bi bi-activity"></i>
-            <span class="nav-text">المراقبة الشاملة</span>
+          <a class="nav-link px-3 {{ 'active' if request.endpoint == 'activity_report' else '' }}" href="{{ url_for('activity_report') }}">
+            <i class="bi bi-graph-up-arrow"></i>
+            <span class="nav-text">تقرير الأنشطة</span>
           </a>
         </li>
         {% endif %}

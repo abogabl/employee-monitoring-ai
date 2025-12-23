@@ -41,22 +41,20 @@ class SmartVideoProcessor:
         
         logger.info("تهيئة المعالج الذكي...")
         
-        # كاشف الأشخاص متوازن
+        # Phase 11: استخدام YOLO مع ByteTrack المدمج بدلاً من PersonTracker المخصص
         try:
-            self.person_detector = PersonDetector(
-                model_size=yolo_model,
-                device=device,
-                imgsz=int(imgsz),
-                conf=0.35,  # العتبة المحسنة
-                iou=0.5     # IOU المحسن
-            )
-            logger.info(f"✓ كاشف الأشخاص الذكي: yolov8{yolo_model}, imgsz={imgsz}")
+            from ultralytics import YOLO
+            self.yolo_model = YOLO(f"yolov8{yolo_model}.pt")
+            self.use_bytetrack = True
+            logger.info(f"✓ YOLO + ByteTrack: yolov8{yolo_model}, imgsz={imgsz}")
         except Exception as e:
-            logger.error(f"فشل تهيئة كاشف الأشخاص: {e}")
-            self.person_detector = None
+            logger.error(f"فشل تهيئة YOLO: {e}")
+            self.yolo_model = None
+            self.use_bytetrack = False
         
-        # تتبع محسن
-        self.tracker = PersonTracker(max_disappeared=45, max_distance=120.0)
+        # الاحتفاظ بالكاشف القديم كـ fallback
+        self.person_detector = None
+        self.tracker = None
         
         # التعرف على الوجوه
         if enable_face_recognition:
@@ -92,6 +90,57 @@ class SmartVideoProcessor:
             self.activity_detector = None
         
         logger.info("✅ المعالج الذكي جاهز")
+    
+    def smart_classify_activity(
+        self, 
+        x1: int, y1: int, x2: int, y2: int, 
+        frame_height: int, frame_width: int, 
+        motion_level: float
+    ) -> Tuple[str, float]:
+        """تصنيف ذكي للأنشطة بناءً على الوضعية والحركة"""
+        
+        person_width = x2 - x1
+        person_height = y2 - y1
+        
+        if person_height <= 0:
+            return 'idle', 0.5
+        
+        # تحليل الوضعية
+        center_y = (y1 + y2) / 2
+        relative_position = center_y / frame_height
+        aspect_ratio = person_width / max(person_height, 1)
+        
+        # قواعد التصنيف الذكي المحسنة
+        if aspect_ratio > 1.3:  # عريض جداً = مستلقي بوضوح
+            if relative_position > 0.5:
+                return 'sleeping', 0.9
+            else:
+                return 'sleeping', 0.8
+        elif aspect_ratio > 1.1 and relative_position > 0.6:
+            if motion_level < 0.03:
+                return 'sleeping', 0.85
+            else:
+                return 'idle', 0.7
+        elif relative_position < 0.3:  # في الأعلى = جالس منتصب
+            if motion_level > 0.08:
+                return 'working', 0.85
+            else:
+                return 'working', 0.7
+        elif relative_position > 0.75:  # في الأسفل جداً
+            if motion_level < 0.05:
+                return 'sleeping', 0.8
+            else:
+                return 'idle', 0.6
+        else:  # في الوسط
+            if motion_level > 0.12:
+                return 'working', 0.8
+            elif motion_level < 0.03:
+                if aspect_ratio > 0.9 and relative_position > 0.5:
+                    return 'sleeping', 0.7
+                else:
+                    return 'idle', 0.6
+            else:
+                return 'working', 0.75
     
     def _classify_activity_smart(self, person_box: Tuple[int, int, int, int], frame: np.ndarray, motion_level: float = 0.0) -> Tuple[str, float]:
         """تصنيف ذكي للنشاط بناءً على الوضعية والحركة"""

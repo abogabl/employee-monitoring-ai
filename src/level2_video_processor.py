@@ -196,15 +196,36 @@ class Level2VideoProcessor(SmartVideoProcessor):
                 scale_x = original_frame.shape[1] / processing_frame.shape[1]
                 scale_y = original_frame.shape[0] / processing_frame.shape[0]
                 
-                # كشف الأشخاص
-                if self.person_detector:
-                    detections = self.person_detector.detect(processing_frame)
-                    tracked_objects = self.tracker.update(detections)
+                # Phase 11: استخدام YOLO ByteTrack المدمج لدقة عالية جداً
+                if self.yolo_model is not None:
+                    # استخدام .track() بدلاً من .predict() + tracker.update()
+                    results = self.yolo_model.track(
+                        processing_frame,
+                        persist=True,           # الحفاظ على المسارات بين الإطارات
+                        tracker="bytetrack.yaml", # ByteTrack لأفضل دقة
+                        classes=[0],            # شخص فقط
+                        conf=self.conf_threshold,
+                        verbose=False
+                    )
+                    
+                    # استخراج المسارات من نتائج ByteTrack
+                    tracked_objects = {}
+                    if results and len(results) > 0 and results[0].boxes is not None:
+                        boxes = results[0].boxes
+                        if boxes.id is not None:
+                            for i, (box, track_id) in enumerate(zip(boxes.xyxy, boxes.id)):
+                                tid = int(track_id.item())
+                                x1, y1, x2, y2 = map(int, box.tolist())
+                                conf = float(boxes.conf[i].item()) if boxes.conf is not None else 0.8
+                                tracked_objects[tid] = {
+                                    'box': (x1, y1, x2, y2),
+                                    'conf': conf
+                                }
                     
                     # معالجة كل شخص
                     for track_id, track_data in tracked_objects.items():
                         x1, y1, x2, y2 = track_data['box']
-                        conf = 0.8
+                        conf = track_data.get('conf', 0.8)
                         
                         # تحديث بيانات الشخص
                         if track_id not in person_data:
@@ -431,88 +452,19 @@ class Level2VideoProcessor(SmartVideoProcessor):
             except Exception as e:
                 logger.error(f"خطأ في تحديث النماذج: {e}")
         
-        # فلترة المسارات "القصيرة" بشكل أكثر صرامة (Phase 9: 3 ثوانٍ)
-        min_seconds = 3.0
-        min_detections = int(min_seconds * (fps / frame_skip))
+        # Phase 11: مع ByteTrack، الفلترة تكون أبسط لأنه يحافظ على المسارات بشكل أفضل
+        # الحد الأدنى: ثانية واحدة من الظهور (ByteTrack أدق بكثير)
+        min_seconds = 1.0
+        min_detections = max(1, int(min_seconds * (fps / frame_skip)))
         
-        filtered_person_data = {}
+        final_merged_data = {}
         for tid, info in person_data.items():
             avg_conf = info['total_confidence'] / max(info['detection_count'], 1)
-            # استبعاد القصير جداً أو الثقة المنخفضة
-            if info['detection_count'] >= min_detections and avg_conf > 0.4:
-                filtered_person_data[tid] = info
+            # ByteTrack موثوق جداً - نقبل مسارات أقصر
+            if info['detection_count'] >= min_detections and avg_conf > 0.35:
+                final_merged_data[tid] = info
         
-        # فلترة المسارات المتقدمة: من {len(person_data)} إلى {len(filtered_person_data)} شخص
-        
-        # --- منطق دمج المسارات المتقدم (Phase 8b) ---
-        final_merged_data = {}
-        sorted_tids = sorted(filtered_person_data.keys(), key=lambda x: filtered_person_data[x]['first_seen'])
-        merged_ids = set()
-
-        for i, tid_a in enumerate(sorted_tids):
-            if tid_a in merged_ids:
-                continue
-            
-            current_main = filtered_person_data[tid_a]
-            final_merged_data[tid_a] = current_main
-            
-            # محاولة البحث عن مسارات لاحقة لدمجها
-            for j in range(i + 1, len(sorted_tids)):
-                tid_b = sorted_tids[j]
-                if tid_b in merged_ids:
-                    continue
-                
-                track_b = filtered_person_data[tid_b]
-                
-                # فجوة زمنية (بالثواني)
-                time_gap = track_b['first_seen'] - current_main['last_seen']
-                
-                # Phase 10: دمج مكاني-زماني بدلاً من زماني فقط
-                if 0 <= time_gap <= 8.0:
-                    can_merge = False
-                    
-                    # 1. الدمج بالملامح / بصمة الوجه (أقوى وسيلة، عتبة صارمة)
-                    if current_main.get('face_embedding') is not None and track_b.get('face_embedding') is not None:
-                        sim = self.face_recognizer.calculate_similarity(current_main['face_embedding'], track_b['face_embedding'])
-                        if sim > 0.75:  # Phase 10: عتبة أعلى لدقة أكبر
-                            can_merge = True
-                            logger.info(f"🧬 دمج بالبصمة الحيوية: {tid_b} -> {tid_a} (similarity: {sim:.2f})")
-                    
-                    # 2. الدمج المكاني-الزماني (Phase 10: فحص المسافة المكانية)
-                    if not can_merge and time_gap < 5.0:
-                        # فحص المسافة المكانية بين آخر موقع لـ A وأول موقع لـ B
-                        if current_main.get('last_position') and track_b.get('positions_history'):
-                            last_pos_a = current_main['last_position']
-                            first_pos_b = track_b['positions_history'][0][:2] if track_b['positions_history'] else None
-                            
-                            if first_pos_b:
-                                # حساب المسافة الإقليدية
-                                distance = ((last_pos_a[0] - first_pos_b[0])**2 + (last_pos_a[1] - first_pos_b[1])**2)**0.5
-                                # إذا كانت المسافة < 100 بكسل (قريب جداً)
-                                if distance < 100:
-                                    can_merge = True
-                                    logger.info(f"📍 دمج مكاني-زماني: {tid_b} -> {tid_a} (dist: {distance:.1f}px, gap: {time_gap:.1f}s)")
-                        
-                    if can_merge:
-                        # تنفيذ الدمج
-                        current_main['last_seen'] = max(current_main['last_seen'], track_b['last_seen'])
-                        current_main['detection_count'] += track_b['detection_count']
-                        current_main['total_confidence'] += track_b['total_confidence']
-                        
-                        # دمج الأنشطة
-                        for act, sessions in track_b['activities'].items():
-                            current_main['activities'][act].extend(sessions)
-                        
-                        # تحديث أفضل لقطة إذا كان B أفضل
-                        if track_b.get('best_snapshot_score', -1) > current_main.get('best_snapshot_score', -1):
-                            current_main['snapshot'] = track_b['snapshot']
-                            current_main['best_snapshot_score'] = track_b['best_snapshot_score']
-                            current_main['has_face'] = current_main['has_face'] or track_b['has_face']
-                        
-                        merged_ids.add(tid_b)
-                        logger.info(f"🔗 تم دمج المسار {tid_b} في {tid_a} (ميزة الربط الزمني)")
-
-        logger.info(f"بعد الدمج المتقدم: {len(final_merged_data)} شخص")
+        logger.info(f"ByteTrack: {len(person_data)} مسار أولي -> {len(final_merged_data)} شخص نهائي")
         
         # إنشاء الإحصائيات النهائية من البيانات المدمجة
         processing_time = time.time() - start_time

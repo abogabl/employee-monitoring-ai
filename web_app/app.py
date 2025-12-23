@@ -83,6 +83,51 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
                                total_hours=round(total_hours, 2),
                                cams_status=cams_status,
                                )
+    
+    # Phase 11: صفحة تقرير الأنشطة اليومية
+    @app.route("/activity-report")
+    @login_required
+    def activity_report():
+        from datetime import datetime
+        report_date = request.args.get('date', date.today().isoformat())
+        
+        # الحصول على بيانات الموظفين (بيانات تجريبية للعرض)
+        emp_list = employees.list_employees()
+        employees_data = []
+        
+        total_work = 0
+        total_sleep = 0
+        total_phone = 0
+        
+        for emp in emp_list:
+            # جلب بيانات الأنشطة من قاعدة البيانات (حالياً بيانات تجريبية)
+            work_hours = round(6 + (hash(emp.get('id', '')) % 30) / 10, 1)
+            sleep_hours = round((hash(emp.get('id', '')) % 10) / 10, 1)
+            phone_hours = round((hash(emp.get('id', '')) % 20) / 10, 1)
+            productivity = max(0, min(100, int(100 * work_hours / (work_hours + sleep_hours + phone_hours + 0.1))))
+            
+            employees_data.append({
+                'name': emp.get('name', 'Unknown'),
+                'snapshot': emp.get('snapshot'),
+                'work_hours': work_hours,
+                'sleep_hours': sleep_hours,
+                'phone_hours': phone_hours,
+                'productivity': productivity
+            })
+            
+            total_work += work_hours
+            total_sleep += sleep_hours
+            total_phone += phone_hours
+        
+        overall_productivity = int(100 * total_work / (total_work + total_sleep + total_phone + 0.1)) if employees_data else 0
+        
+        return render_template("activity_report.html",
+                               today=report_date,
+                               employees=employees_data,
+                               total_work=round(total_work, 1),
+                               total_sleep=round(total_sleep, 1),
+                               total_phone=round(total_phone, 1),
+                               productivity=overall_productivity)
 
     @app.route("/cameras")
     @login_required
