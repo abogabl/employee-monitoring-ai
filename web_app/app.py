@@ -18,10 +18,11 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, stream_template, send_from_directory
 from werkzeug.utils import secure_filename
 
-from src.attendance_system import AttendanceSystem
-from src.employee_manager import EmployeeDatabase
-from src.multi_camera_runner import MultiCameraRunner
-from src.reporting import ReportGenerator
+# Old imports - to be reimplemented
+# from src.attendance_system import AttendanceSystem
+# from src.employee_manager import EmployeeDatabase
+# from src.multi_camera_runner import MultiCameraRunner
+# from src.reporting import ReportGenerator
 from .auth import auth_bp, login_required
 from .api import api_bp
 
@@ -52,15 +53,31 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
         app.secret_key = secrets.token_hex(32)
         logger.warning("⚠️ استخدام مفتاح مؤقت - أنشئ config/security_config.py للإنتاج")
 
-    # مكونات مشتركة
-    runner = MultiCameraRunner(config_path)
-    try:
-        runner.load_config()
-    except Exception:
-        pass
-    attendance = AttendanceSystem()
-    employees = EmployeeDatabase()
-    reports = ReportGenerator(attendance=attendance)
+    # مكونات مشتركة - Fresh Start: استخدام stubs حتى يتم إعادة التنفيذ
+    # runner = MultiCameraRunner(config_path)
+    # try:
+    #     runner.load_config()
+    # except Exception:
+    #     pass
+    # attendance = AttendanceSystem()
+    # employees = EmployeeDatabase()
+    # reports = ReportGenerator(attendance=attendance)
+    
+    # Stub replacements
+    class StubRunner:
+        cameras = {}
+        def get_all_status(self): return {}
+    
+    class StubAttendance:
+        def get_daily_attendance(self, date): return []
+        def calculate_work_hours(self, eid, date): return 0.0
+    
+    class StubEmployees:
+        def list_employees(self): return []
+    
+    runner = StubRunner()
+    attendance = StubAttendance()
+    employees = StubEmployees()
 
     # تسجيل Blueprints
     app.register_blueprint(auth_bp)
@@ -524,13 +541,13 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
     @app.post("/test-video/process")
     @login_required
     def test_video_process():
-        """معالجة فيديو الاختبار مع AI حقيقي"""
+        """معالجة فيديو الاختبار - Fresh Start Simple Version"""
         import time as time_module
-        from src.level2_video_processor import Level2VideoProcessor
-        from src.file_validator import FileValidator
+        from src.video_processor import SimpleVideoProcessor
+        import cv2
         
         try:
-            logger.info("=== بدء معالجة فيديو جديد ===")
+            logger.info("=== بدء معالجة فيديو جديد (Simple Processor) ===")
             
             if 'video' not in request.files:
                 logger.error("لم يتم العثور على ملف فيديو في الطلب")
@@ -554,75 +571,41 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             video_file.save(input_path)
             logger.info(f"تم حفظ الفيديو: {input_path}")
             
-            # التحقق من صحة الفيديو
-            logger.info("التحقق من صحة الفيديو...")
-            validator = FileValidator(max_size_mb=500, max_duration_sec=600)
-            is_valid, error_msg, video_info = validator.validate_video_file(input_path)
+            # التحقق البسيط من الفيديو
+            cap = cv2.VideoCapture(str(input_path))
+            if not cap.isOpened():
+                input_path.unlink()
+                return jsonify({"success": False, "error": "لا يمكن فتح الفيديو"})
             
-            if not is_valid:
-                logger.error(f"الفيديو غير صحيح: {error_msg}")
-                # حذف الملف غير الصحيح
-                try:
-                    input_path.unlink()
-                except:
-                    pass
-                return jsonify({"success": False, "error": f"الملف غير صحيح: {error_msg}"})
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = total_frames / fps
+            cap.release()
             
-            logger.info(f"✓ الفيديو صحيح: {video_info['duration_sec']:.1f}s, {video_info['resolution']}")
+            logger.info(f"✓ الفيديو صحيح: {duration:.1f}s, {total_frames} frames")
             
-            # قراءة الإعدادات - Phase 10: محسنة للسرعة القصوى
-            confidence = float(request.form.get('confidence', 0.45))
-            frame_skip = int(request.form.get('frame_skip', 8))  # frame_skip=8 worked with ByteTrack
-            max_duration = int(request.form.get('max_duration', 30))
-            imgsz = int(request.form.get('imgsz', 480))  # Phase 10: 480p للسرعة
-            # تفعيل التعرف على الوجوه والأنشطة للدقة الكاملة
-            enable_face = True
-            enable_activity = True
+            # قراءة الإعدادات
+            confidence = float(request.form.get('confidence', 0.5))
+            frame_skip = int(request.form.get('frame_skip', 3))
+            max_duration = int(request.form.get('max_duration', 60))
             
-            # تهيئة معالج المستوى الثاني مع الذكاء الاصطناعي المتقدم
-            # Phase 10: السرعة القصوى والدقة الكاملة
-            logger.info("تهيئة Level2VideoProcessor مع الذكاء الاصطناعي المتقدم...")
-            processor = Level2VideoProcessor(
-                device="cpu",
-                imgsz=480,            # Phase 10: 480p للسرعة القصوى
-                conf_threshold=0.45,  # عتبة صارمة لتقليل المعرفات الوهمية
-                enable_face_recognition=enable_face,
-                enable_activity_recognition=enable_activity,
-                enable_advanced_ai=True,
-                yolo_model="s",
-                activity_window=15
+            # تهيئة المعالج البسيط
+            logger.info("تهيئة SimpleVideoProcessor...")
+            processor = SimpleVideoProcessor(
+                model_path="yolov8n.pt",
+                conf_threshold=confidence,
+                frame_skip=frame_skip
             )
-            logger.info("تم تهيئة معالج المستوى الثاني بنجاح")
             
-            # معالجة الفيديو مع progress tracking
-            video_task_id = f"video_{timestamp}"
-            logger.info(f"بدء معالجة الفيديو: {input_path} [Task ID: {video_task_id}]")
-            logger.info(f"الإعدادات: imgsz={imgsz}, frame_skip={frame_skip}, confidence={confidence}")
-            try:
-                results = processor.process_video(
-                    input_path=str(input_path),
-                    output_path=str(output_path),
-                    frame_skip=frame_skip,
-                    max_duration=max_duration,
-                    task_id=video_task_id,
-                    enable_progress_tracking=True
-                )
-            except ValueError as e:
-                logger.error(f"خطأ في صيغة الفيديو: {e}")
-                return jsonify({
-                    "success": False, 
-                    "error": f"مشكلة في الفيديو: {str(e)}. تأكد من أن الفيديو صالح وغير تالف."
-                })
-            except Exception as e:
-                logger.error(f"خطأ في معالجة الفيديو: {e}")
-                return jsonify({
-                    "success": False, 
-                    "error": f"خطأ في المعالجة: {str(e)}"
-                })
-            logger.info("انتهت المعالجة")
+            # معالجة الفيديو
+            logger.info(f"بدء المعالجة: frame_skip={frame_skip}, confidence={confidence}")
+            results = processor.process_video(
+                input_path=str(input_path),
+                output_path=str(output_path),
+                max_duration=max_duration
+            )
             
-            # إضافة task_id للنتائج (للعميل)
-            results['task_id'] = video_task_id
+            logger.info("انتهت المعالجة بنجاح")
             
             # حذف الملف الأصلي
             try:
@@ -631,22 +614,10 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             except Exception as e:
                 logger.warning(f"فشل حذف الملف المؤقت: {e}")
             
-            # التحقق من الملف الناتج الفعلي (.mp4 أو .avi)
-            actual_output = None
+            # إضافة رابط الفيديو الناتج
             if output_path.exists():
-                actual_output = output_filename
-            elif output_path.with_suffix('.avi').exists():
-                actual_output = output_filename.replace('.mp4', '.avi')
+                results['output_video'] = url_for('static', filename=f'uploads/test_videos/{output_filename}')
             
-            if actual_output:
-                results['output_video'] = url_for('static', filename=f'uploads/test_videos/{actual_output}')
-            else:
-                logger.warning("الملف الناتج غير موجود!")
-            
-            logger.info(f"اكتملت المعالجة: {results.get('total_persons', 0)} أشخاص, {results.get('total_activities', 0)} نشاط")
-            
-            # إضافة success flag
-            results['success'] = True
             return jsonify(results)
             
         except Exception as e:
