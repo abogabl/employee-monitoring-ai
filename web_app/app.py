@@ -604,13 +604,21 @@ def create_app(config_path: str = "config/cameras_config.json") -> Flask:
             frame_skip = int(request.form.get('frame_skip', 1))  # BoT-SORT يعمل أفضل مع frame_skip=1
             max_duration = int(request.form.get('max_duration', 60))
             
-            # تهيئة المعالج المحسن مع BoT-SORT
-            logger.info(f"تهيئة EnhancedVideoProcessor (BoT-SORT, frame_skip={frame_skip})...")
-            processor = EnhancedVideoProcessor(
+            # تهيئة المعالج الكامل مع كل الميزات
+            logger.info(f"تهيئة FullVideoProcessor...")
+            
+            # قراءة إعدادات الميزات من الفورم
+            enable_face = request.form.get('enable_face', 'true').lower() == 'true'
+            enable_activity = request.form.get('enable_activity', 'true').lower() == 'true'
+            
+            from src.full_processor import FullVideoProcessor
+            processor = FullVideoProcessor(
                 model_path="yolov8n.pt",
                 conf_threshold=confidence,
                 tracker_type="botsort",
-                frame_skip=frame_skip
+                frame_skip=frame_skip,
+                enable_face=enable_face,
+                enable_activity=enable_activity
             )
             
             # معالجة الفيديو
